@@ -4,7 +4,7 @@ This repository contains functional prototypes and visual experiments developed 
 
 As an Electronics and Communication Engineering (ECE) student, my primary focus is leveraging Makerchip's VIZ feature to translate abstract hardware logic into intuitive, real-time visual interfaces.
 
-In simple words, I have created two prototypes(one Ripple Carry Adder and second Opcode Decoder VIZ). I focused on VIZ especially. Annnd, here are the details-
+In simple words, I have created two prototypes(one Ripple Carry Adder and second Opcode Decoder VIZ). I focused on VIZ especially. Here are the details-
 
 ## Ripple Carry Adder 
 To bridge my academic coursework in Digital System Design with the Makerchip ecosystem, I implemented a foundational Ripple Carry Adder. The core digital logic was written in TL-Verilog, highlighting its streamlined and highly efficient syntax compared to traditional SystemVerilog.
@@ -21,9 +21,9 @@ The VIZ Engineering: The primary technical challenge—and triumph—of this pro
 Building upon the decoding logic concepts from mentor Steve Hoover's single-cycle CPU curriculum, this prototype tackles the cognitive overload of reading machine code.
 The "Bit-Slicer" visually decomposes a standard 32-bit RISC-V instruction. Instead of forcing the user to decipher a dense string of binary, the custom VIZ logic actively parses the instruction and maps it into color-coded, labeled fields (R, I, S, B, U, J formats) at a single glance. This serves as the foundational UI prototype for my GSoC microelectronics pedagogy proposal.
 
-![Opcode Decoder Diagram](Opcode_decoder_DIAGRAM.png)
+![Opcode Decoder Diagram](OpCode_Decoder_DIAGRAM.png)
 
-![Opcode Decoder VIZ](Opcode_decoder_VIZ.png)
+![Opcode Decoder VIZ](OpCode_Decoder_VIZ.png)
 
 # How to Run These Prototypes
 
