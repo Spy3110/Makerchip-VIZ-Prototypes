@@ -35,7 +35,7 @@
          $s_3 = $a3 ^ $b3 ^ $c_2;
          $c_out = ($a3 & $b3) | ($c_2 & ($a3 ^ $b3));
          
-         \viz_js //its inside the @4 i see
+         \viz_js //its inside the @5 i see
             box: {width: 400, height: 200, fill: "#222222"},
             init() {
                let objs = {};
@@ -80,10 +80,10 @@
                let objs = this.getObjects();
                
                // Pulling exact scalar variables!
-               let a = [ '$a0'.asInt(), '$a1'.asInt(), '$a2'.asInt(), '$a3'.asInt() ];
-               let b = [ '$b0'.asInt(), '$b1'.asInt(), '$b2'.asInt(), '$b3'.asInt() ];
-               let s = [ '$s_0'.asInt(), '$s_1'.asInt(), '$s_2'.asInt(), '$s_3'.asInt() ];
-               let c = [ '$c_0'.asInt(), '$c_1'.asInt(), '$c_2'.asInt() ];
+               let a = [ '<<4$a0'.asInt(), '<<4$a1'.asInt(), '<<4$a2'.asInt(), '<<4$a3'.asInt() ];
+               let b = [ '<<4$b0'.asInt(), '<<4$b1'.asInt(), '<<4$b2'.asInt(), '<<4$b3'.asInt() ];
+               let s = [ '<<3$s_0'.asInt(), '<<2$s_1'.asInt(), '<<1$s_2'.asInt(), '$s_3'.asInt() ];
+               let c = [ '<<3$c_0'.asInt(), '<<2$c_1'.asInt(), '<<1$c_2'.asInt() ];
                
                // Fetching the final overflow bit
                let final_c = '$c_out'.asInt(); 
