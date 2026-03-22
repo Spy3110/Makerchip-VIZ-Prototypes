@@ -38,15 +38,54 @@
                box4_text: ["Text", "0", {left: 235, top: 60, fill: "white", fontSize: 20, fontFamily: "monospace"}],
                box4_name: ["Text", "FF#3", {left: 218 , top: 20, fill: "black", fontSize: 20, fontFamily: "monospace"}],
                
+               line_0to1: ["Line", [80, 70, 100, 70], {stroke: "cyan", strokeWidth: 2}],
+               line_1to2: ["Line", [140, 70, 160, 70], {stroke: "cyan", strokeWidth: 2}],
+               line_2to3: ["Line", [200, 70, 220, 70], {stroke: "cyan", strokeWidth: 2}],
+               
+               xor_input1: ["Line", [180, 90, 205, 115], {stroke: "cyan", strokeWidth: 1.5}], 
+               xor_input2: ["Line", [245, 90, 220, 115], {stroke: "cyan", strokeWidth: 1.5}], 
+               
                xor_gate: ["Circle", {left: 182, top: 110, radius: 30, fill: "black", stroke: "cyan", strokeWidth: 2}],    
                gate_text: ["Text", "XOR", {left: 196, top: 129, fill: "white", fontSize: 20, fontFamily: "monospace"}],
                             //ohhhh now i got is that [left point,left, right, right point size]
-               line: ["Line", [25, 145, 182, 145],{stroke: "white"}],
-               baseline_vert_up: ["Line", [25, 145, 25, 74], {stroke: "white"}],
-               baseline_final_input: ["Line", [25, 73, 40, 73], {stroke: "white"}]
-               
+               line: ["Line", [25, 145, 182, 145],{stroke: "cyan"}],
+               baseline_vert_up: ["Line", [25, 145, 25, 74], {stroke: "cyan"}],
+               baseline_final_input: ["Line", [25, 73, 40, 73], {stroke: "cyan"}],
+               feedback_state_dot: ["Circle", {left: 175, top: 140, radius: 5, fill: "#444444", strokeWidth: 0}],
             },
+            
+            //ANIMATION!
             render() {
+               // Step 1: Grab the canvas and the dot so we don't have to type their long names over and over!
+               let canvas = this.global.canvas;
+               let dot = this.getObjects().feedback_state_dot;
+
+               // Step 2: Teleport the dot to the starting line (The top of the feedback wire)
+               dot.set({ left: 175, top: 140, fill: "#00FF00" });
+
+               // Animate LEFT 
+                 dot.animate({ left: 20 }, {
+                     duration: 200, // A bit longer because it's a long horizontal wire!
+                     onChange: canvas.renderAll.bind(canvas),
+                     onComplete: () => {
+
+                         // Animate up
+                         dot.animate({ top: 69 }, {
+                             duration: 100,
+                             onChange: canvas.renderAll.bind(canvas),
+                             onComplete: () => {
+
+                                 // animate right
+                                 dot.animate({ left: 35 }, {
+                                     duration: 100,
+                                     onChange: canvas.renderAll.bind(canvas)
+
+                                 });
+                             }
+                         });
+                     }
+                 }); //the hell! so long
+                 
                let val1 = '$Box1'.asInt();
 
                this.getObjects().box1_text.set({text: val1.toString()});
@@ -55,7 +94,7 @@
                    this.getObjects().box1_shape.set({fill: "#00FF00"}); // Neon Green
                } else {
                    this.getObjects().box1_shape.set({fill: "#222222"}); // Dark Gray
-               }
+               } //mwahahahaha!
                //box-2
                let val2 = '$Box2'.asInt();
                this.getObjects().box2_text.set({text: val2.toString()});
