@@ -6,24 +6,41 @@ As an Electronics and Communication Engineering (ECE) student, my primary focus 
 
 In simple words, I have created two prototypes(one Ripple Carry Adder and second Opcode Decoder VIZ). I focused on VIZ especially. Here are the details-
 
+## Recent Updates & Explorations
+
+### 1. Animated 4-bit LFSR (Linear Feedback Shift Register)
+To solve the challenge of presenting time-staggered pipeline behavior, I explored the `animate(...)` function in Fabric.js. 
+* **Result:** Successfully built a dynamic visualization that physically traces the data moving through the feedback loop and XOR gate, making the spatial and temporal flow intuitive.
+![LFSR Animation](assets/LinearFeedbackShiftRegister.gif)
+
+### 2. Vending Machine (FSM)
+* **Status:** Hardware logic (RTL) complete.
+* Designed a Finite State Machine for a vending controller. *(Note: VIZ integration is currently paused as I pivoted to master the animation logic on the LFSR first!)*
+
+---
+
 ## Ripple Carry Adder 
 To bridge my academic coursework in Digital System Design with the Makerchip ecosystem, I implemented a foundational Ripple Carry Adder. The core digital logic was written in TL-Verilog, highlighting its streamlined and highly efficient syntax compared to traditional SystemVerilog.
 
 This is the diagram of the Ripple carry Adder- 
-![Ripple carry adder DIAGRAM](DIAGRAM-RCA.png)
+![Ripple carry adder DIAGRAM](assets/DIAGRAM-RCA.png)
 
 The VIZ Engineering: The primary technical challenge—and triumph—of this prototype was engineering the VIZ bridge to correctly synchronize with the simulation cycles. I successfully debugged the pipeline to display the present sum outputs without cycle delays, ensuring an accurate, real-time visual representation of the carry propagation.
 
-![VIZ RCA](VIZ-RCA.png)
+![VIZ RCA](assets/VIZ-RCA.png)
+
+---
 
 ## Bit-Slicer (or "RISC-V Opcode Decoder")
 
 Building upon the decoding logic concepts from mentor Steve Hoover's single-cycle CPU curriculum, this prototype tackles the cognitive overload of reading machine code.
 The "Bit-Slicer" visually decomposes a standard 32-bit RISC-V instruction. Instead of forcing the user to decipher a dense string of binary, the custom VIZ logic actively parses the instruction and maps it into color-coded, labeled fields (R, I, S, B, U, J formats) at a single glance. This serves as the foundational UI prototype for my GSoC microelectronics pedagogy proposal.
 
-![Opcode Decoder Diagram](OpCode_Decoder_DIAGRAM.png)
+![Opcode Decoder Diagram](assets/OpCode_Decoder_DIAGRAM.png)
 
-![Opcode Decoder VIZ](OpCode_Decoder_VIZ.png)
+![Opcode Decoder VIZ](assets/OpCode_Decoder_VIZ.png)
+
+---
 
 # How to Run These Prototypes
 
