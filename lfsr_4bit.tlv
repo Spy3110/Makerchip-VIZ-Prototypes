@@ -5,7 +5,7 @@
    // Linear Feedback Shift Register: Used for encryption and cryptography irl
    // ============================================
 \SV
-   m5_makerchip_module   // (Expanded in Nav-TLV pane.)
+   m5_makerchip_module 
 \TLV
 !   $reset = *reset;
    
@@ -52,20 +52,25 @@
                baseline_vert_up: ["Line", [25, 145, 25, 74], {stroke: "cyan"}],
                baseline_final_input: ["Line", [25, 73, 40, 73], {stroke: "cyan"}],
                feedback_state_dot: ["Circle", {left: 175, top: 140, radius: 5, fill: "#444444", strokeWidth: 0}],
-            },
+              
+               dot0_1: ["Circle", {left: 80, top: 68, radius: 3, fill: "#444444", strokeWidth: 0}],
+              
+               dot1_2: ["Circle", {left: 140, top: 68, radius: 3, fill: "#444444", strokeWidth: 0}],
+               
+               dot2_3: ["Circle", {left: 200, top: 68, radius: 3, fill: "#444444", strokeWidth: 0}],
+               },
             
             //ANIMATION!
             render() {
-               // Step 1: Grab the canvas and the dot so we don't have to type their long names over and over!
+              
                let canvas = this.global.canvas;
                let dot = this.getObjects().feedback_state_dot;
 
-               // Step 2: Teleport the dot to the starting line (The top of the feedback wire)
                dot.set({ left: 175, top: 140, fill: "#00FF00" });
 
                // Animate LEFT 
                  dot.animate({ left: 20 }, {
-                     duration: 200, // A bit longer because it's a long horizontal wire!
+                     duration: 100, 
                      onChange: canvas.renderAll.bind(canvas),
                      onComplete: () => {
 
@@ -85,6 +90,25 @@
                          });
                      }
                  }); //the hell! so long
+                 
+                 this.getObjects().dot0_1.set({ left: 80, top: 68, fill: "#00FF00"});
+                 this.getObjects().dot0_1.animate({ left: 100 }, {
+                                     duration: 200,
+                                     onChange: this.global.canvas.renderAll.bind(canvas)
+
+                                 });
+                 this.getObjects().dot1_2.set({ left: 140, top: 68, fill: "#00FF00"});
+                 this.getObjects().dot1_2.animate({ left: 160 }, {
+                                     duration: 200,
+                                     onChange: this.global.canvas.renderAll.bind(canvas)
+
+                                 });
+                 this.getObjects().dot2_3.set({ left: 200, top: 68, fill: "#00FF00"});
+                 this.getObjects().dot2_3.animate({ left: 220 }, {
+                                     duration: 200,
+                                     onChange: this.global.canvas.renderAll.bind(canvas)
+
+                                 });
                  
                let val1 = '$Box1'.asInt();
 
@@ -124,7 +148,7 @@
                }
               }
 
-   *passed = *cyc_cnt > 40;
+   *passed = *cyc_cnt > 50;
    *failed = 1'b0;
 \SV
    endmodule
