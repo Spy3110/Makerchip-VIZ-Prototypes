@@ -1,0 +1,57 @@
+\m5_TLV_version 1d: tl-x.org
+\m5
+   //use(m5-1.0)
+\SV
+   m5_makerchip_module
+\TLV
+   $reset = *reset;
+   $green_dur[7:0]  = 8'd8; //in cycle its taking 16 cycles instead of 8
+   $yellow_dur[7:0] = 8'd3; //ARGH WHY IS THAAAAT??!?!?
+   $red_dur[7:0]    = 8'd5; //okay, so i removed state signals, now its working fine
+
+   $next_state[1:0] = 
+      ($timer == 8'd0) ? 
+         ( ($state == 2'd0) ? 2'd1 :  // Green -> Yellow
+           ($state == 2'd1) ? 2'd2 :  // Yellow -> Red
+           2'd0 ) :                   // Red -> Green
+      $state;
+
+   $next_timer[7:0] = 
+      ($timer == 8'd0) ? 
+         ( ($state == 2'd0) ? $yellow_dur :
+           ($state == 2'd1) ? $red_dur :
+           $green_dur ) :
+      $timer - 8'd1;
+
+   $state[1:0] = $reset ? 2'd0 : >>1$next_state;
+   $timer[7:0] = $reset ? $green_dur : >>1$next_timer;
+
+   $green  = ($state == 2'd0);
+   $yellow = ($state == 2'd1);
+   $red    = ($state == 2'd2);
+
+   *passed = *cyc_cnt > 100;
+   *failed = 1'b0;
+
+   \viz_js
+      box: {left: 0, top: 0, width: 80, height: 220, fill: "#222222", rx: 10, ry: 10},
+      
+      template: {
+         red_light:    ["Circle", {left: 15, top: 15, radius: 25, fill: "#440000"}],
+         yellow_light: ["Circle", {left: 15, top: 85, radius: 25, fill: "#444400"}],
+         green_light:  ["Circle", {left: 15, top: 155, radius: 25, fill: "#004400"}]
+      },
+      
+      render() {
+         let r = '$red'.asBool();
+         let y = '$yellow'.asBool();
+         let g = '$green'.asBool();
+         
+         this.getObjects().red_light.set({fill: r ? "#FF3333" : "#440000"});
+         this.getObjects().yellow_light.set({fill: y ? "#FFFF33" : "#444400"});
+         this.getObjects().green_light.set({fill: g ? "#33FF33" : "#004400"});
+      },
+      
+      where: {left: 20, top: 20, width: 80, height: 220}
+\SV
+   endmodule
