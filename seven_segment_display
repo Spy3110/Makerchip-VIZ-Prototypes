@@ -1,0 +1,150 @@
+\m5_TLV_version 1d: tl-x.org
+\m5
+   //the seven segment display in TLV! BOOM!
+   //dont just play with VIZ, understand it! /ᐠ. ｡.ᐟ\ᵐᵉᵒʷˎˊ˗
+\SV
+   m5_makerchip_module
+\TLV
+   $reset = *reset;
+   `BOGUS_USE($reset)
+   
+   $data[3:0] = $rand[3:0];
+   
+   $seg_out[6:0] = ($data == 4'd0) ? 7'b111_1110 :
+                   ($data == 4'd1) ? 7'b011_0000 :
+                   ($data == 4'd2) ? 7'b110_1101 :
+                   ($data == 4'd3) ? 7'b111_1001 :
+                   ($data == 4'd4) ? 7'b011_0011 :
+                   ($data == 4'd5) ? 7'b101_1011 :
+                   ($data == 4'd6) ? 7'b101_1111 :
+                   ($data == 4'd7) ? 7'b111_0000 :
+                   ($data == 4'd8) ? 7'b111_1111 :
+                   ($data == 4'd9) ? 7'b111_1011 :
+                   7'b000_0000;
+   
+   \viz_js
+      box: {width: 300, height: 320, fill: "#111111"},
+      
+      init() {
+         let o = {};
+         
+         o.title = new fabric.Text("7-Segment Display", {
+            left: 80, top: 10,
+            fontSize: 14, fill: "#ffffff",
+            fontFamily: "monospace"
+         });
+         
+         // Horizontal segments (a, g, d)
+         o.seg_a = new fabric.Rect({
+            left: 105, top: 80,
+            width: 60, height: 12,
+            fill: "#333333", rx: 3, ry: 3,
+            strokeWidth: 0
+         });
+         o.seg_g = new fabric.Rect({
+            left: 105, top: 148,
+            width: 60, height: 12,
+            fill: "#333333", rx: 3, ry: 3,
+            strokeWidth: 0
+         });
+         o.seg_d = new fabric.Rect({
+            left: 105, top: 216,
+            width: 60, height: 12,
+            fill: "#333333", rx: 3, ry: 3,
+            strokeWidth: 0
+         });
+         
+         // Vertical segments (f, b, e, c)
+         o.seg_f = new fabric.Rect({
+            left: 90, top: 90,
+            width: 12, height: 55,
+            fill: "#333333", rx: 3, ry: 3,
+            strokeWidth: 0
+         });
+         o.seg_b = new fabric.Rect({
+            left: 168, top: 90,
+            width: 12, height: 55,
+            fill: "#333333", rx: 3, ry: 3,
+            strokeWidth: 0
+         });
+         o.seg_e = new fabric.Rect({
+            left: 90, top: 158,
+            width: 12, height: 55,
+            fill: "#333333", rx: 3, ry: 3,
+            strokeWidth: 0
+         });
+         o.seg_c = new fabric.Rect({
+            left: 168, top: 158,
+            width: 12, height: 55,
+            fill: "#333333", rx: 3, ry: 3,
+            strokeWidth: 0
+         });
+         
+         // Labels
+         o.num_label = new fabric.Text("Data: 0", {
+            left: 105, top: 245,
+            fontSize: 16, fill: "#ffffff",
+            fontFamily: "monospace"
+         });
+         o.bits_label = new fabric.Text("abcdefg: 1111110", {
+            left: 90, top: 270,
+            fontSize: 11, fill: "#888888",
+            fontFamily: "monospace"
+         });
+         o.binary_label = new fabric.Text("Binary: 0000", {
+            left: 90, top: 290,
+            fontSize: 11, fill: "#888888",
+            fontFamily: "monospace"
+         });
+         
+         return o;
+      },
+      
+      render() {
+         let o = this.getObjects();
+         
+         let data = '$data'.asInt();
+         let seg = '$seg_out'.asInt();
+         
+         // Extract individual segment bits
+         // seg_out = abcdefg (bit6=a ... bit0=g)
+         let a = (seg >> 6) & 1;
+         let b = (seg >> 5) & 1;
+         let c = (seg >> 4) & 1;
+         let d = (seg >> 3) & 1;
+         let e = (seg >> 2) & 1;
+         let f = (seg >> 1) & 1;
+         let g = (seg >> 0) & 1;
+         
+         let ON  = "#ff3300";
+         let OFF = "#2a2a2a";
+         
+         o.seg_a.set({fill: a ? ON : OFF});
+         o.seg_b.set({fill: b ? ON : OFF});
+         o.seg_c.set({fill: c ? ON : OFF});
+         o.seg_d.set({fill: d ? ON : OFF});
+         o.seg_e.set({fill: e ? ON : OFF});
+         o.seg_f.set({fill: f ? ON : OFF});
+         o.seg_g.set({fill: g ? ON : OFF});
+         
+         // Update labels
+         let binStr = isNaN(data) ? "XXXX" : 
+                      data.toString(2).padStart(4, "0");
+         let segStr = isNaN(seg) ? "XXXXXXX" : 
+                      seg.toString(2).padStart(7, "0");
+         
+         o.num_label.set({
+            text: "Data: " + (isNaN(data) ? "X" : data)
+         });
+         o.bits_label.set({
+            text: "abcdefg: " + segStr
+         });
+         o.binary_label.set({
+            text: "Binary: " + binStr
+         });
+      }
+   
+   *passed = *cyc_cnt > 40;
+   *failed = 1'b0;
+\SV
+   endmodule
