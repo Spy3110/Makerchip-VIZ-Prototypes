@@ -1,0 +1,148 @@
+\m5_TLV_version 1d: tl-x.org
+\m5
+\SV
+   m5_makerchip_module
+\TLV
+   $reset = *reset;
+   
+   // Random inputs
+   $sel[1:0] = $rand[1:0];
+   $d0[3:0]  = $rand[5:2];
+   $d1[3:0]  = $rand[9:6];
+   $d2[3:0]  = $rand[13:10];
+   $d3[3:0]  = $rand[17:14];
+   
+   // 4:1 MUX logic (converted from H&H book with pain-- I mean love)
+   $yy[3:0] = $sel[1] ? ($sel[0] ? $d3 : $d2)
+                       : ($sel[0] ? $d1 : $d0);
+                       
+   //yeah, this VIZ is always so chunky
+   \viz_js
+      box: {width: 380, height: 220, fill: "#1a1a2e"},
+      
+      init() {
+         let o = {};
+         
+         // Title
+         o.title = new fabric.Text("4:1 MUX", {
+            left: 150, top: 10,
+            fontSize: 16, fill: "#ffffff",
+            fontFamily: "monospace", fontWeight: "bold"
+         });
+         
+         // D0-D3 labels and values (left side)
+         let inputs = ["D0","D1","D2","D3"];
+         let colors = ["#e63946","#457b9d","#2a9d8f","#e9c46a"];
+         
+         for (let i = 0; i < 4; i++) {
+            let ypos = 50 + i * 40;
+            
+            // Input label
+            o["lbl_"+i] = new fabric.Text(inputs[i]+":", {
+               left: 20, top: ypos,
+               fontSize: 13, fill: colors[i],
+               fontFamily: "monospace"
+            });
+            
+            // Input value
+            o["val_"+i] = new fabric.Text("0000", {
+               left: 60, top: ypos,
+               fontSize: 13, fill: "#aaaaaa",
+               fontFamily: "monospace"
+            });
+            
+            // Wire from input to MUX box
+            o["wire_"+i] = new fabric.Line(
+               [130, ypos+8, 190, ypos+8],
+               {stroke: "#444444", strokeWidth: 2}
+            );
+         }
+         
+         // MUX box
+         o.mux_box = new fabric.Rect({
+            left: 190, top: 40,
+            width: 60, height: 140,
+            fill: "#16213e",
+            stroke: "#4cc9f0",
+            strokeWidth: 2,
+            rx: 5, ry: 5
+         });
+         
+         o.mux_lbl = new fabric.Text("MUX", {
+            left: 210, top: 100,
+            fontSize: 13, fill: "#4cc9f0",
+            fontFamily: "monospace"
+         });
+         
+         // Output wire
+         o.wire_out = new fabric.Line(
+            [250, 110, 310, 110],
+            {stroke: "#ffffff", strokeWidth: 2}
+         );
+         
+         // Output value
+         o.val_out = new fabric.Text("Y: 0000", {
+            left: 315, top: 103,
+            fontSize: 13, fill: "#ffffff",
+            fontFamily: "monospace"
+         });
+         
+         // SEL display at bottom
+         o.sel_lbl = new fabric.Text("SEL: 00", {
+            left: 155, top: 195,
+            fontSize: 13, fill: "#f72585",
+            fontFamily: "monospace"
+         });
+         
+         return o;
+      },
+      
+      render() {
+         let o = this.getObjects();
+         
+         // Get signal values
+         let sel = '$sel'.asInt();
+         let d = [
+            '$d0'.asInt(),
+            '$d1'.asInt(),
+            '$d2'.asInt(),
+            '$d3'.asInt()
+         ];
+         let yy = '$yy'.asInt();
+         
+         // Helper: convert to 4-bit binary string
+         let toBin = (v) => isNaN(v) ? "XXXX" : 
+                           v.toString(2).padStart(4,'0');
+         
+         // Update input values and wire colors
+         let activeColors = ["#e63946","#457b9d","#2a9d8f","#e9c46a"];
+         
+         for (let i = 0; i < 4; i++) {
+            // Update value text
+            o["val_"+i].set({text: toBin(d[i])});
+            
+            // Highlight selected wire, dim others
+            let isSelected = (sel === i);
+            o["wire_"+i].set({
+               stroke: isSelected ? activeColors[i] : "#444444",
+               strokeWidth: isSelected ? 3 : 1
+            });
+            o["val_"+i].set({
+               fill: isSelected ? activeColors[i] : "#aaaaaa"
+            });
+         }
+         
+         // Update output
+         o.val_out.set({text: "Y: " + toBin(yy)});
+         
+         // Update SEL display
+         o.sel_lbl.set({
+            text: "SEL: " + (isNaN(sel) ? "XX" : 
+                  sel.toString(2).padStart(2,'0'))
+         });
+      }
+   
+   *passed = *cyc_cnt > 40;
+   *failed = 1'b0;
+\SV
+   endmodule
