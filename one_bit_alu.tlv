@@ -1,6 +1,8 @@
 \m5_TLV_version 1d: tl-x.org
 \m5
-   //A 1-BIT ALU!!
+   /*
+   1-BIT ALU...
+   */
 \SV
    m5_makerchip_module  
 \TLV
@@ -32,9 +34,9 @@
              ($operation == 2'b10) ? $sum :
              1'b0;
    `BOGUS_USE($result)
-
-   //the VIZ
-   \viz_js 
+   
+   //------------THE VIZ SECTION------------
+   \viz_js
       box: {width: 600, height: 340, fill: "#fff4ec", stroke: "#e8b89a", strokeWidth: 2, rx: 8, ry: 8},
       
       init() {
@@ -116,8 +118,8 @@
          o.omux_rect = omux.rect;
          // "0 / 1 / 2" labels inside output mux
          o.omux_0 = new fabric.Text("00", {left: 340, top: 115, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
-         o.omux_1 = new fabric.Text("01", {left: 340, top: 158, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
-         o.omux_2 = new fabric.Text("10", {left: 340, top: 201, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
+         o.omux_1 = new fabric.Text("01", {left: 340, top: 162, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
+         o.omux_2 = new fabric.Text("10", {left: 340, top: 208, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
 
          // ── Wire helper: Manhattan polyline (horizontal then vertical then horizontal) ──
          const mwire = (pts) => new fabric.Polyline(
@@ -162,7 +164,7 @@
          o.w_fa_omux   = mwire([[240,247],[265,247],[265,215],[330,215]]);
          
          //the stupid carry_in wire manually added damnnit
-         o.w_cin_bus  = mwire([[230,227],[230,200],[300,200],[300,70]]); //i changed
+         o.w_cin_bus  = mwire([[230,227],[230,200],[300,200],[300,70]]); //changed
 
          // CarryOut downward from FA bottom
          o.w_carry_out = mwire([[230,269],[230,310]]);
@@ -170,11 +172,11 @@
          o.w_result    = mwire([[374,170],[450,170]]);
 
          // ── Input/Output Labels ──
-         o.lbl_a        = new fabric.Text("A",        {left: 5,   top: 70,  fontSize: 12, fill: "#333", fontFamily: "monospace", fontWeight: "bold"});
-         o.lbl_b        = new fabric.Text("B",        {left: 5,   top: 220, fontSize: 12, fill: "#333", fontFamily: "monospace", fontWeight: "bold"});
+         o.lbl_a        = new fabric.Text("A",        {left: 10,   top: 72,  fontSize: 12, fill: "#333", fontFamily: "monospace", fontWeight: "bold"});
+         o.lbl_b        = new fabric.Text("B",        {left: 10,   top: 242, fontSize: 12, fill: "#333", fontFamily: "monospace", fontWeight: "bold"});
          o.lbl_ainv     = new fabric.Text("Ainvert",  {left: 60,  top: 15,  fontSize: 10, fill: "#5050c0", fontFamily: "monospace"});
          o.lbl_binv     = new fabric.Text("Binvert", {left: 60, top: 310, fontSize: 10, fill: "#5050c0", fontFamily: "monospace"});
-         o.lbl_cin      = new fabric.Text("CarryIn", {left: 280, top: 55, fontSize: 10, fill: "#5050c0", fontFamily: "monospace"}); //i changed
+         o.lbl_cin      = new fabric.Text("CarryIn", {left: 280, top: 55, fontSize: 10, fill: "#5050c0", fontFamily: "monospace"}); //changed
          o.lbl_result   = new fabric.Text("\u2192 Result", {left: 460, top: 163, fontSize: 12, fill: "#333", fontFamily: "monospace", fontWeight: "bold"});
          o.lbl_cout     = new fabric.Text("CarryOut", {left: 210, top: 315, fontSize: 10, fill: "#333", fontFamily: "monospace"});
          o.lbl_and_gate = new fabric.Text("AND",      {left: 190, top: 130, fontSize: 9,  fill: "#c0603a", fontFamily: "monospace"});
@@ -235,7 +237,7 @@
          let bb        = '$bb'.asInt();
          let ainvert   = '$ainvert'.asInt();
          let binvert   = '$binvert'.asInt();
-         let carry_in  = '$carry_in'.asInt(); //i changed
+         let carry_in  = '$carry_in'.asInt(); //changed
          let a_mux     = '$a_mux'.asInt();
          let b_mux     = '$b_mux'.asInt();
          let and_val   = '$and'.asInt();
@@ -269,7 +271,7 @@
          o.w_fa_omux.set({stroke: wire(sum_val)});
          o.w_result.set({stroke: wire(result)});
          o.w_carry_out.set({stroke: wire(carry_out)});
-         o.w_cin_bus.set({stroke: wire(carry_in)}); //i changed
+         o.w_cin_bus.set({stroke: wire(carry_in)}); //changed
 
          // Gate highlight: glow orange if output is 1
          const gateColor = (v) => isNaN(v) ? "#fde8d8" : (v ? "#ffc09a" : "#fde8d8");
