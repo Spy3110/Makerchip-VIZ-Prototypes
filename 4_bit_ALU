@@ -1,0 +1,44 @@
+\m5_TLV_version 1d: tl-x.org
+\m5
+\SV
+   m5_makerchip_module
+\TLV
+   $reset = *reset;
+   `BOGUS_USE($reset)
+
+   // Shared controls
+   $ainvert = $rand[1];
+   $binvert = $rand[2];
+   $operation[1:0] = $rand[4:3];
+
+   /alu[3:0]
+      $aa = (#alu == 0) ? $rand[5]  :
+            (#alu == 1) ? $rand[6]  :
+            (#alu == 2) ? $rand[7]  : $rand[8];
+
+      $bb = (#alu == 0) ? $rand[9]  :
+            (#alu == 1) ? $rand[10] :
+            (#alu == 2) ? $rand[11] : $rand[12];
+
+      $a_mux = /top$ainvert ? !$aa : $aa;
+      $b_mux = /top$binvert ? !$bb : $bb;
+
+      $carry_in  = (#alu == 0) ? /top$binvert : /alu[#alu-1]$carry_out;
+      $and       = $a_mux & $b_mux;
+      $or        = $a_mux | $b_mux;
+      $sum       = $a_mux ^ $b_mux ^ $carry_in;
+      $carry_out = ($a_mux & $b_mux) | ($carry_in & ($a_mux ^ $b_mux));
+
+      $result = (/top$operation == 2'b00) ? $and :
+                (/top$operation == 2'b01) ? $or  :
+                (/top$operation == 2'b10) ? $sum :
+                                            $b_mux;
+
+      `BOGUS_USE($carry_out)
+      `BOGUS_USE($result)
+
+
+   *passed = *cyc_cnt > 40;
+   *failed = 1'b0;
+\SV
+   endmodule
