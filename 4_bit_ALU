@@ -5,7 +5,6 @@
 \TLV
    $reset = *reset;
    `BOGUS_USE($reset)
-
    // Shared controls
    $ainvert = $rand[1];
    $binvert = $rand[2];
@@ -15,7 +14,6 @@
       $aa = (#alu == 0) ? $rand[5]  :
             (#alu == 1) ? $rand[6]  :
             (#alu == 2) ? $rand[7]  : $rand[8];
-
       $bb = (#alu == 0) ? $rand[9]  :
             (#alu == 1) ? $rand[10] :
             (#alu == 2) ? $rand[11] : $rand[12];
@@ -33,10 +31,409 @@
                 (/top$operation == 2'b01) ? $or  :
                 (/top$operation == 2'b10) ? $sum :
                                             $b_mux;
-
       `BOGUS_USE($carry_out)
       `BOGUS_USE($result)
 
+      //------------THE VIZ SECTION (replicated x4, one per /alu[#alu])------------
+      \viz_js
+         box: {width: 600, height: 340, fill: "#fff4ec", stroke: "#e8b89a", strokeWidth: 2, rx: 8, ry: 8},
+         // Per-instance vertical stacking: each successive /alu[#alu] instance is offset
+         // by +360 in top (340 panel height + 20px gutter) from the previous one.
+         // This is the same mechanism as example6 in VIZ_demos (layout: applies an
+         // incremental per-step transform across replicated instances; getIndex() is only
+         // valid inside init()/render(), not inside layout/where).
+         layout: {top: 360, left: 0},
+         where: {left: 0, top: 0, width: 600, height: 340},
+
+         init() {
+            let o = {};
+            let idx = this.getIndex();   // 0 = LSB (top of stack), 3 = MSB (bottom of stack)
+
+            // ── Title (per-bit) ──
+            o.title = new fabric.Text("1-Bit ALU  —  bit[" + idx + "]" + (idx === 0 ? "  (LSB)" : (idx === 3 ? "  (MSB)" : "")), {
+               left: 220, top: 10,
+               fontSize: 15, fill: "#b05020",
+               fontFamily: "monospace", fontWeight: "bold"
+            });
+
+            // ── Helper: draw an AND gate (D-shape) via SVG path ──
+            const andGatePath = (x, y, w, h) => {
+               let hw = h / 2;
+               return new fabric.Path(
+                  `M ${x} ${y} L ${x + w * 0.5} ${y} Q ${x + w} ${y} ${x + w} ${y + hw} Q ${x + w} ${y + h} ${x + w * 0.5} ${y + h} L ${x} ${y + h} Z`,
+                  {fill: "#fde8d8", stroke: "#c0603a", strokeWidth: 2}
+               );
+            };
+
+            // ── Helper: draw an OR gate via SVG path ──
+            const orGatePath = (x, y, w, h) => {
+               let hw = h / 2;
+               return new fabric.Path(
+                  `M ${x} ${y} Q ${x + w * 0.4} ${y} ${x + w} ${y + hw} Q ${x + w * 0.4} ${y + h} ${x} ${y + h} Q ${x + w * 0.3} ${y + hw} ${x} ${y} Z`,
+                  {fill: "#fde8d8", stroke: "#c0603a", strokeWidth: 2}
+               );
+            };
+
+            // ── Helper: MUX trapezoid (matches reference image, wide-left narrow-right with 0/1 select labels) ──
+            const muxTrap = (x, y, w, h, topLabel) => {
+               let grp = {};
+               // trapezoid: wide on left edge, narrower on right edge (like the reference image)
+               let inset = h * 0.18;
+               grp.poly = new fabric.Polygon([
+                  {x: x,         y: y},
+                  {x: x,         y: y + h},
+                  {x: x + w,     y: y + h - inset},
+                  {x: x + w,     y: y + inset}
+               ], {fill: "#fce4cf", stroke: "#c0603a", strokeWidth: 2});
+               grp.lbl0 = new fabric.Text("0", {left: x + 6, top: y + 4, fontSize: 10, fill: "#7a2e00", fontFamily: "monospace"});
+               grp.lbl1 = new fabric.Text("1", {left: x + 6, top: y + h - 16, fontSize: 10, fill: "#7a2e00", fontFamily: "monospace"});
+               grp.topLbl = topLabel ? new fabric.Text(topLabel, {left: x, top: y - 16, fontSize: 10, fill: "#5050c0", fontFamily: "monospace"}) : null;
+               return grp;
+            };
+
+            // ── Helper: NOT bubble (small circle on the "1" input path, since invert feeds the bottom mux input) ──
+            const notBubble = (x, y) => new fabric.Circle({
+               left: x, top: y, radius: 5,
+               fill: "#fff4ec", stroke: "#c0603a", strokeWidth: 2
+            });
+
+            // ── Helper: full adder box ──
+            const faBox = (x, y, w, h) => {
+               let grp = {};
+               grp.rect = new fabric.Rect({left: x, top: y, width: w, height: h,
+                  fill: "#fce4cf", stroke: "#5050c0", strokeWidth: 2, rx: 4});
+               grp.lbl  = new fabric.Text("+", {left: x + w/2 - 5, top: y + h/2 - 9,
+                  fontSize: 18, fill: "#3030a0", fontFamily: "monospace", fontWeight: "bold"});
+               return grp;
+            };
+
+            // ══════════════════════════════════════
+            //   LAYOUT (all X/Y coords) — mirrors reference image
+            // ══════════════════════════════════════
+
+            // ── Helper: NOT gate symbol (triangle + inversion bubble) ──
+            // Draws a mini triangle body + a small circle at the output tip, like a real NOT gate.
+            // x,y = tip of the triangle (output side, pointing RIGHT toward the mux).
+            // The triangle body sits to the LEFT of the tip.
+            const notGate = (x, y, key) => {
+               // Triangle body: tip at (x-6, y), base at left (x-22, y±8)
+               o["not_tri_" + key] = new fabric.Triangle({
+                  left: x - 4, top: y - 9,
+                  width: 18, height: 18,
+                  fill: "#fde8d8", stroke: "#c0603a", strokeWidth: 1.5,
+                  angle: 90   // rotate so tip points right
+               });
+               // Inversion bubble at output tip
+               o["not_bub_" + key] = new fabric.Circle({
+                  left: x - 7, top: y - 4,
+                  radius: 4,
+                  fill: "#fff4ec", stroke: "#c0603a", strokeWidth: 1.5
+               });
+            };
+
+            // A mux — left side top (y=50, height=60)
+            // Input "0" = A  → enters at top of mux left edge  (y=50+0.25*60 = 65)
+            // Input "1" = NOT A → enters at bottom of mux left edge (y=50+0.75*60 = 95)
+            let amux = muxTrap(50, 50, 44, 60, "Ainvert");
+            o.amux_poly = amux.poly; o.amux_lbl0 = amux.lbl0; o.amux_lbl1 = amux.lbl1; o.amux_top = amux.topLbl;
+
+            // "0" input wire: A → mux top-input pin
+            o.w_a_in0 = new fabric.Polyline([{x:5,y:65},{x:50,y:65}],
+               {stroke:"#cccccc", strokeWidth:2, fill:"transparent"});
+            o.lbl_a_in0 = new fabric.Text("A", {left:6, top:54, fontSize:10, fill:"#333", fontFamily:"monospace", fontWeight:"bold"});
+
+            // "1" input wire: NOT A → through NOT gate → mux bottom-input pin
+            // Wire from left edge to NOT gate input; NOT gate output connects to mux
+            o.w_a_in1_pre  = new fabric.Polyline([{x:5,y:95},{x:24,y:95}],
+               {stroke:"#cccccc", strokeWidth:2, fill:"transparent"});
+            notGate(43, 95, "a");   // NOT gate tip lands at x=43, feeding into mux at x=50
+            o.w_a_in1_post = new fabric.Polyline([{x:43,y:95},{x:50,y:95}],
+               {stroke:"#cccccc", strokeWidth:2, fill:"transparent"});
+            o.lbl_a_in1 = new fabric.Text("A", {left:6, top:84, fontSize:10, fill:"#333", fontFamily:"monospace", fontWeight:"bold"});
+            // value bubble for NOT A, sits above the NOT gate
+            o.val_nota = new fabric.Circle({left:28, top:105, radius:8, fill:"#ffffff", stroke:"#aaaaaa", strokeWidth:1});
+            o.vt_nota  = new fabric.Text("?", {left:33, top:108, fontSize:9, fill:"#333", fontFamily:"monospace"});
+
+            // B mux — left side bottom (y=220, height=60)
+            // Input "0" = B  → top of mux left edge (y=220+0.25*60 = 235)
+            // Input "1" = NOT B → bottom of mux left edge (y=220+0.75*60 = 265)
+            let bmux = muxTrap(50, 220, 44, 60, "Binvert");
+            o.bmux_poly = bmux.poly; o.bmux_lbl0 = bmux.lbl0; o.bmux_lbl1 = bmux.lbl1; o.bmux_top = bmux.topLbl;
+
+            // "0" input wire: B → mux top-input pin
+            o.w_b_in0 = new fabric.Polyline([{x:5,y:235},{x:50,y:235}],
+               {stroke:"#cccccc", strokeWidth:2, fill:"transparent"});
+            o.lbl_b_in0 = new fabric.Text("B", {left:6, top:224, fontSize:10, fill:"#333", fontFamily:"monospace", fontWeight:"bold"});
+
+            // "1" input wire: NOT B → through NOT gate → mux bottom-input pin
+            o.w_b_in1_pre  = new fabric.Polyline([{x:5,y:265},{x:24,y:265}],
+               {stroke:"#cccccc", strokeWidth:2, fill:"transparent"});
+            notGate(43, 265, "b");
+            o.w_b_in1_post = new fabric.Polyline([{x:43,y:265},{x:50,y:265}],
+               {stroke:"#cccccc", strokeWidth:2, fill:"transparent"});
+            o.lbl_b_in1 = new fabric.Text("B", {left:6, top:254, fontSize:10, fill:"#333", fontFamily:"monospace", fontWeight:"bold"});
+            // value bubble for NOT B
+            o.val_notb = new fabric.Circle({left:28, top:275, radius:8, fill:"#ffffff", stroke:"#aaaaaa", strokeWidth:1});
+            o.vt_notb  = new fabric.Text("?", {left:33, top:278, fontSize:9, fill:"#333", fontFamily:"monospace"});
+
+            // AND gate
+            o.and_gate = andGatePath(180, 80, 60, 44);
+
+            // OR gate
+            o.or_gate  = orGatePath(180, 155, 60, 44);
+
+            // Full adder box (computes SUM, used for op=10)
+            let fa = faBox(180, 225, 60, 44);
+            o.fa_rect = fa.rect;
+            o.fa_lbl  = fa.lbl;
+
+            // Output MUX — trapezoid, 4-way select (00/01/10/11), matches reference image
+            o.omux_poly = new fabric.Polygon([
+               {x: 330, y: 90},
+               {x: 330, y: 240},
+               {x: 374, y: 225},
+               {x: 374, y: 105}
+            ], {fill: "#fce4cf", stroke: "#c0603a", strokeWidth: 2});
+            o.omux_00 = new fabric.Text("00", {left: 336, top: 100, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
+            o.omux_01 = new fabric.Text("01", {left: 336, top: 142, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
+            o.omux_10 = new fabric.Text("10", {left: 336, top: 184, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
+            o.omux_11 = new fabric.Text("11", {left: 336, top: 222, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
+
+            // Vertical select wire from "op[1:0]" label down into the output mux (per reference image)
+            o.w_op_select = new fabric.Polyline([{x: 460, y: 35}, {x: 460, y: 90}, {x: 352, y: 90}], {
+               stroke: "#5050c0", strokeWidth: 2, fill: "transparent"
+            });
+            o.lbl_op_select = new fabric.Text("operation[1:0]", {left: 405, top: 18, fontSize: 10, fill: "#5050c0", fontFamily: "monospace"});
+
+            // ── Wire helper: Manhattan polyline ──
+            const mwire = (pts) => new fabric.Polyline(
+               pts.map(([x,y]) => ({x, y})),
+               {stroke: "#cccccc", strokeWidth: 2, fill: "transparent"}
+            );
+
+            // (A and B single-wires replaced by the two-input pairs above; kept as stubs for render() compatibility)
+            o.w_a_to_amux = mwire([[5,65],[5,65]]);   // zero-length stub — render() drives w_a_in0/w_a_in1_pre instead
+            o.w_b_to_bmux = mwire([[5,235],[5,235]]);
+
+            // ── Bus lines coming out of A_mux ──
+            o.w_amux_bus  = mwire([[94,80],[120,80],[120,232]]);
+            o.w_amux_and  = mwire([[120,92],[180,92]]);
+            o.w_amux_or   = mwire([[120,168],[186,168]]);
+            o.w_amux_fa   = mwire([[120,232],[180,232]]);
+
+            // ── Bus lines coming out of B_mux ──
+            o.w_bmux_bus  = mwire([[94,252],[130,252],[130,112]]);
+            o.w_bmux_and  = mwire([[130,112],[180,112]]);
+            o.w_bmux_or   = mwire([[130,188],[185,188]]);
+            o.w_bmux_fa   = mwire([[130,252],[180,252]]);
+
+            // ── Gate outputs → output MUX ──
+            o.w_and_omux  = mwire([[240,102],[265,102],[265,118],[330,118]]);
+            o.w_or_omux   = mwire([[240,177],[265,177],[265,160],[330,160]]);
+            o.w_fa_omux   = mwire([[240,247],[265,247],[265,202],[330,202]]);
+
+            if (idx === 0) {
+               // alu[0]: CarryIn is tied directly to Binvert (two's-complement subtraction
+               // setup), NOT fed by a previous-instance CarryOut — there is no /alu[-1].
+               // Draw this as a short internal tap off the Binvert control line instead of
+               // an external incoming wire, so students don't mistake it for ripple input.
+               o.w_cin_in = mwire([[72, 280],[72, 200],[230,200],[230,227]]);
+               o.lbl_cin_special = new fabric.Text("(tied to Binvert)", {
+                  left: 80, top: 195, fontSize: 9, fill: "#5050c0", fontFamily: "monospace", fontStyle: "italic"
+               });
+            } else {
+               // alu[1..3]: CarryIn is a real ripple input from the previous instance's
+               // CarryOut. Enters at the TOP edge (top=0), where the previous panel's
+               // CarryOut wire (exiting its bottom edge) visually lines up after stacking.
+               o.w_cin_in = mwire([[230,0],[230,200],[230,200],[230,227]]);
+            }
+
+            // ── CarryOut wire: exits at the BOTTOM edge of the panel. For alu[0..2], this
+            //    visually lines up with the next instance's top-edge CarryIn entry point
+            //    after vertical stacking (layout offset = 360, panel height = 340, so the
+            //    20px gutter is the visible "ripple" gap between panels). alu[3] (MSB) has
+            //    no next instance, so its CarryOut is labeled as the final overflow bit. ──
+            o.w_carry_out = mwire([[230,269],[230,340]]);
+
+            // Result out from omux right edge
+            o.w_result    = mwire([[374,170],[450,170]]);
+
+            // ── Labels ──
+            o.lbl_a        = new fabric.Text("A",        {left: 10,  top: 72,  fontSize: 12, fill: "#333", fontFamily: "monospace", fontWeight: "bold"});
+            o.lbl_b        = new fabric.Text("B",        {left: 10,  top: 242, fontSize: 12, fill: "#333", fontFamily: "monospace", fontWeight: "bold"});
+            o.lbl_result   = new fabric.Text("\u2192 Result", {left: 460, top: 163, fontSize: 12, fill: "#333", fontFamily: "monospace", fontWeight: "bold"});
+            o.lbl_cin      = new fabric.Text(idx === 0 ? "CarryIn" : "CarryIn (from bit[" + (idx-1) + "])",
+                                              {left: 235, top: idx === 0 ? 188 : -12, fontSize: 10, fill: "#5050c0", fontFamily: "monospace"});
+            o.lbl_cout     = new fabric.Text(idx === 3 ? "CarryOut (final / overflow)" : "CarryOut \u2192 bit[" + (idx+1) + "]",
+                                              {left: 175, top: 320, fontSize: 10, fill: "#333", fontFamily: "monospace"});
+            o.lbl_and_gate = new fabric.Text("AND",      {left: 190, top: 130, fontSize: 9,  fill: "#c0603a", fontFamily: "monospace"});
+            o.lbl_or_gate  = new fabric.Text("OR",       {left: 190, top: 204, fontSize: 9,  fill: "#c0603a", fontFamily: "monospace"});
+
+            // Ainvert / Binvert control wires (drop down into the mux select line, per reference image)
+            o.w_ainvert_ctrl = mwire([[72, 22],[72, 50]]);
+            o.w_binvert_ctrl = mwire([[72, 280],[72, 310]]);
+
+            // ── Value bubbles (show live signal values) ──
+            const bubble = (x, y) => new fabric.Circle({left: x, top: y, radius: 9,
+               fill: "#ffffff", stroke: "#aaaaaa", strokeWidth: 1});
+            const bubbleTxt = (x, y) => new fabric.Text("?", {left: x, top: y,
+               fontSize: 10, fill: "#333333", fontFamily: "monospace"});
+
+            o.val_a    = bubble(28,   40);   o.vt_a    = bubbleTxt(34,   43);
+            o.val_b    = bubble(28,   211);  o.vt_b    = bubbleTxt(34,   214);
+            o.val_amux = bubble(100,  55);   o.vt_amux = bubbleTxt(106,  58);
+            o.val_bmux = bubble(100,  255);  o.vt_bmux = bubbleTxt(106,  258);
+            o.val_and  = bubble(240, 80);    o.vt_and  = bubbleTxt(246, 83);
+            o.val_or   = bubble(240, 155);   o.vt_or   = bubbleTxt(246, 158);
+            o.val_sum  = bubble(243, 225);   o.vt_sum  = bubbleTxt(249, 228);
+            o.val_res  = bubble(440, 160);   o.vt_res  = bubbleTxt(446, 163);
+            o.val_cout = bubble(200, 282);   o.vt_cout = bubbleTxt(206, 285);
+            o.val_cin  = bubble(218, idx === 0 ? 190 : 4);   o.vt_cin  = bubbleTxt(224, idx === 0 ? 193 : 7);
+
+            // Ainvert / Binvert bubbles
+            o.val_ainv = bubble(63, 8);   o.vt_ainv = bubbleTxt(69, 11);
+            o.val_binv = bubble(63, 312); o.vt_binv = bubbleTxt(69, 315);
+
+            // ── Operation display box ──
+            o.op_box = new fabric.Rect({
+               left: 390, top: 50, width: 160, height: 60,
+               fill: "#fce4cf", stroke: "#c0603a", strokeWidth: 2, rx: 6
+            });
+            o.lbl_op = new fabric.Text("Operation:", {
+               left: 398, top: 56, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"
+            });
+            o.op_bits = new fabric.Text("op = --", {
+               left: 398, top: 72, fontSize: 13, fill: "#b05020", fontFamily: "monospace", fontWeight: "bold"
+            });
+            o.op_name = new fabric.Text("( -- )", {
+               left: 398, top: 90, fontSize: 13, fill: "#5050c0", fontFamily: "monospace", fontWeight: "bold"
+            });
+
+            return o;
+         },
+
+         render() {
+            let o = this.getObjects();
+
+            // All signals are local to this /alu[#alu] scope, EXCEPT the three shared
+            // controls which live one level up at /top. No cross-indexed quoting needed,
+            // so this avoids the M4 single-quote scoping bug from the number-panel attempt.
+            let aa        = '$aa'.asInt();
+            let bb        = '$bb'.asInt();
+            let ainvert   = '/top$ainvert'.asInt();
+            let binvert   = '/top$binvert'.asInt();
+            let operation = '/top$operation'.asInt();
+            let carry_in  = '$carry_in'.asInt();
+            let a_mux     = '$a_mux'.asInt();
+            let b_mux     = '$b_mux'.asInt();
+            let and_val   = '$and'.asInt();
+            let or_val    = '$or'.asInt();
+            let sum_val   = '$sum'.asInt();
+            let carry_out = '$carry_out'.asInt();
+            let result    = '$result'.asInt();
+
+            // Wire color helper: hot = signal is 1
+            const hot  = "#e05010";
+            const cold = "#cccccc";
+            const wire = (v) => isNaN(v) ? "#aaaaaa" : (v ? hot : cold);
+
+            // Derived NOT values (these aren't separate TLV signals, just visual inverses of aa/bb)
+            let not_aa = isNaN(aa) ? NaN : (aa ? 0 : 1);
+            let not_bb = isNaN(bb) ? NaN : (bb ? 0 : 1);
+
+            // ── A mux two-input wires ──
+            // "0" path: A → mux directly
+            o.w_a_in0.set({stroke: wire(aa)});
+            // "1" path: A → NOT gate → mux; wire before gate carries A, wire after carries NOT A
+            o.w_a_in1_pre.set({stroke: wire(aa)});
+            o.w_a_in1_post.set({stroke: wire(not_aa)});
+            o.not_bub_a.set({fill: not_aa === 1 ? "#ffc09a" : "#fff4ec"});   // bubble glows when NOT A = 1
+            o.not_tri_a.set({fill: not_aa === 1 ? "#ffc09a" : "#fde8d8"});
+            // NOT A value bubble
+            o.val_nota.set({fill: not_aa === 1 ? "#ffc09a" : "#ffffff"});
+            o.vt_nota.set({text: isNaN(not_aa) ? "X" : not_aa.toString()});
+
+            // ── B mux two-input wires ──
+            o.w_b_in0.set({stroke: wire(bb)});
+            o.w_b_in1_pre.set({stroke: wire(bb)});
+            o.w_b_in1_post.set({stroke: wire(not_bb)});
+            o.not_bub_b.set({fill: not_bb === 1 ? "#ffc09a" : "#fff4ec"});
+            o.not_tri_b.set({fill: not_bb === 1 ? "#ffc09a" : "#fde8d8"});
+            o.val_notb.set({fill: not_bb === 1 ? "#ffc09a" : "#ffffff"});
+            o.vt_notb.set({text: isNaN(not_bb) ? "X" : not_bb.toString()});
+
+            // (stub wires — not visible, kept for backward compat)
+            o.w_a_to_amux.set({stroke: "transparent"});
+            o.w_b_to_bmux.set({stroke: "transparent"});
+            o.w_amux_bus.set({stroke: wire(a_mux)});
+            o.w_amux_and.set({stroke: wire(a_mux)});
+            o.w_amux_or.set({stroke: wire(a_mux)});
+            o.w_amux_fa.set({stroke: wire(a_mux)});
+            o.w_bmux_bus.set({stroke: wire(b_mux)});
+            o.w_bmux_and.set({stroke: wire(b_mux)});
+            o.w_bmux_or.set({stroke: wire(b_mux)});
+            o.w_bmux_fa.set({stroke: wire(b_mux)});
+            o.w_and_omux.set({stroke: wire(and_val)});
+            o.w_or_omux.set({stroke: wire(or_val)});
+            o.w_fa_omux.set({stroke: wire(sum_val)});
+            o.w_result.set({stroke: wire(result)});
+            o.w_carry_out.set({stroke: wire(carry_out)});
+            o.w_cin_in.set({stroke: wire(carry_in)});
+            o.w_op_select.set({stroke: "#5050c0"});
+
+            // Gate highlight: glow orange if output is 1
+            const gateColor = (v) => isNaN(v) ? "#fde8d8" : (v ? "#ffc09a" : "#fde8d8");
+            o.and_gate.set({fill: gateColor(and_val)});
+            o.or_gate.set({fill:  gateColor(or_val)});
+            o.fa_rect.set({fill:  gateColor(sum_val)});
+
+            // MUX select-line glow: highlight whichever input (0 or 1) is currently routed through
+            o.amux_lbl0.set({fill: ainvert ? "#7a2e00" : hot});
+            o.amux_lbl1.set({fill: ainvert ? hot : "#7a2e00"});
+            o.bmux_lbl0.set({fill: binvert ? "#7a2e00" : hot});
+            o.bmux_lbl1.set({fill: binvert ? hot : "#7a2e00"});
+            o.amux_poly.set({fill: ainvert ? "#ffc09a" : "#fce4cf"});
+            o.bmux_poly.set({fill: binvert ? "#ffc09a" : "#fce4cf"});
+            // (amux_not / bmux_not removed — NOT gate is now drawn via not_tri_a/not_bub_a above)
+
+            // Output MUX: highlight selected slot (matches operation[1:0])
+            const opColor = (slot) => operation === slot ? hot : "#7a2e00";
+            o.omux_00.set({fill: opColor(0)});
+            o.omux_01.set({fill: opColor(1)});
+            o.omux_10.set({fill: opColor(2)});
+            o.omux_11.set({fill: opColor(3)});
+
+            // Value bubbles helper
+            const setVal = (bub, txt, v) => {
+               let s = isNaN(v) ? "X" : v.toString();
+               bub.set({fill: v === 1 ? "#ffc09a" : "#ffffff"});
+               txt.set({text: s});
+            };
+
+            setVal(o.val_a,    o.vt_a,    aa);
+            setVal(o.val_b,    o.vt_b,    bb);
+            setVal(o.val_amux, o.vt_amux, a_mux);
+            setVal(o.val_bmux, o.vt_bmux, b_mux);
+            setVal(o.val_and,  o.vt_and,  and_val);
+            setVal(o.val_or,   o.vt_or,   or_val);
+            setVal(o.val_sum,  o.vt_sum,  sum_val);
+            setVal(o.val_res,  o.vt_res,  result);
+            setVal(o.val_cout, o.vt_cout, carry_out);
+            setVal(o.val_cin,  o.vt_cin,  carry_in);
+            setVal(o.val_ainv, o.vt_ainv, ainvert);
+            setVal(o.val_binv, o.vt_binv, binvert);
+
+            // ── Operation display box ──
+            const opBits  = ["00", "01", "10", "11"];
+            const opNames = ["AND", "OR", "ADD/SUB", "B-pass"];
+            if (isNaN(operation)) {
+               o.op_bits.set({text: "op = ??"});
+               o.op_name.set({text: "( ? )"});
+            } else {
+               o.op_bits.set({text: "op = " + opBits[operation]});
+               o.op_name.set({text: "( " + opNames[operation] + " )"});
+            }
+         }
 
    *passed = *cyc_cnt > 40;
    *failed = 1'b0;
