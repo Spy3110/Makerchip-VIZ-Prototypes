@@ -6,17 +6,18 @@
    $reset = *reset;
    `BOGUS_USE($reset)
    // Shared controls
-   $ainvert = $rand[1];
-   $binvert = $rand[2];
+   $ainvert = 1'b0;
+   $binvert = 1'b0;
    $operation[1:0] = $rand[4:3];
 
+   //giving custom inputs from here
    /alu[3:0]
-      $aa = (#alu == 0) ? $rand[5]  :
-            (#alu == 1) ? $rand[6]  :
-            (#alu == 2) ? $rand[7]  : $rand[8];
-      $bb = (#alu == 0) ? $rand[9]  :
-            (#alu == 1) ? $rand[10] :
-            (#alu == 2) ? $rand[11] : $rand[12];
+      $aa = (#alu == 0) ? 1'b0 :
+            (#alu == 1) ? 1'b1 :
+            (#alu == 2) ? 1'b0 : 1'b1;
+      $bb = (#alu == 0) ? 1'b0  :
+            (#alu == 1) ? 1'b1 :
+            (#alu == 2) ? 1'b1 : 1'b0;
 
       $a_mux = /top$ainvert ? !$aa : $aa;
       $b_mux = /top$binvert ? !$bb : $bb;
@@ -30,7 +31,7 @@
       $result = (/top$operation == 2'b00) ? $and :
                 (/top$operation == 2'b01) ? $or  :
                 (/top$operation == 2'b10) ? $sum :
-                                            $b_mux;
+                                            $bb;
       `BOGUS_USE($carry_out)
       `BOGUS_USE($result)
 
@@ -199,11 +200,11 @@
             o.omux_10 = new fabric.Text("10", {left: 336, top: 184, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
             o.omux_11 = new fabric.Text("11", {left: 336, top: 222, fontSize: 11, fill: "#7a2e00", fontFamily: "monospace"});
 
-            // Vertical select wire from "op[1:0]" label down into the output mux (per reference image)
-            o.w_op_select = new fabric.Polyline([{x: 460, y: 35}, {x: 460, y: 90}, {x: 352, y: 90}], {
-               stroke: "#5050c0", strokeWidth: 2, fill: "transparent"
+            // Selection line attaches directly to the output MUX.
+            o.w_op_select = new fabric.Polyline([{x: 352, y: 55}, {x: 352, y: 98}], {
+               stroke: "#da6d42", strokeWidth: 2, fill: "transparent"
             });
-            o.lbl_op_select = new fabric.Text("operation[1:0]", {left: 405, top: 18, fontSize: 10, fill: "#5050c0", fontFamily: "monospace"});
+            o.lbl_op_select = new fabric.Text("operation[1:0]", {left: 300, top: 40, fontSize: 10, fill: "#5050c0", fontFamily: "monospace"});
 
             // ── Wire helper: Manhattan polyline ──
             const mwire = (pts) => new fabric.Polyline(
@@ -231,6 +232,7 @@
             o.w_and_omux  = mwire([[240,102],[265,102],[265,118],[330,118]]);
             o.w_or_omux   = mwire([[240,177],[265,177],[265,160],[330,160]]);
             o.w_fa_omux   = mwire([[240,247],[265,247],[265,202],[330,202]]);
+            o.w_passb_omux = mwire([[5,235],[5,345],[245,345],[245,280],[300,280],[300,225],[330,225]]);
 
             if (idx === 0) {
                // alu[0]: CarryIn is tied directly to Binvert (two's-complement subtraction
@@ -238,7 +240,9 @@
                // Draw this as a short internal tap off the Binvert control line instead of
                // an external incoming wire, so students don't mistake it for ripple input.
                o.w_cin_in = mwire([[72, 280],[72, 200],[230,200],[230,227]]);
-               o.lbl_cin_special = new fabric.Text("(tied to Binvert)", {
+               o.cin_binvert_junction = new fabric.Circle({left: 68, top: 276, radius: 4,
+                  fill: "#5050c0", stroke: "#5050c0", strokeWidth: 1});
+               o.lbl_cin_special = new fabric.Text("CarryIn = Binvert", {
                   left: 80, top: 195, fontSize: 9, fill: "#5050c0", fontFamily: "monospace", fontStyle: "italic"
                });
             } else {
@@ -376,6 +380,7 @@
             o.w_and_omux.set({stroke: wire(and_val)});
             o.w_or_omux.set({stroke: wire(or_val)});
             o.w_fa_omux.set({stroke: wire(sum_val)});
+            o.w_passb_omux.set({stroke: wire(bb)});
             o.w_result.set({stroke: wire(result)});
             o.w_carry_out.set({stroke: wire(carry_out)});
             o.w_cin_in.set({stroke: wire(carry_in)});
