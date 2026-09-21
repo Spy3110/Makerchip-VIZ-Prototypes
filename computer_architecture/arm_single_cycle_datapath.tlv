@@ -13,12 +13,12 @@
 
    // ---------- Tiny instruction ROM (real LEGv8 encodings) ----------
    $instr[31:0] =
-      ($idx == 3'd0) ? 32'h8B020023 :   // ADD  X3, X1, X2
-      ($idx == 3'd1) ? 32'hCB010044 :   // SUB  X4, X2, X1
-      ($idx == 3'd2) ? 32'hF8400005 :   // LDUR X5, [X0, #0]
-      ($idx == 3'd3) ? 32'hF8000003 :   // STUR X3, [X0, #0]
-      ($idx == 3'd4) ? 32'hB4000041 :   // CBZ  X1, #2  (pretend zero, taken)
-                       32'hB4000044;    // CBZ  X4, #2  (pretend non-zero, not taken)
+      ($idx == 3'd0) ? 32'h8B020023 :    // ADD  X3, X1, X2
+      ($idx == 3'd1) ? 32'hCB010044 :    // SUB  X4, X2, X1
+      ($idx == 3'd2) ? 32'hF8400005 :    // LDUR X5, [X0, #0]
+      ($idx == 3'd3) ? 32'hF8000003 :    // STUR X3, [X0, #0]
+      ($idx == 3'd4) ? 32'hB4000041 :    // CBZ  X1, #2  (pretend zero, taken)
+                       32'hB4000044;     // CBZ  X4, #2  (pretend non-zero, not taken)
 
    // Pretend ALU Zero output (stimulus): only entry 4 is a taken branch.
    $zero = ($idx == 3'd4);
@@ -44,18 +44,23 @@
                  $is_cbz ? 2'b01 :
                            2'b00;
    $pcsrc = $branch && $zero;
+   
+   // Self-checking invariants
+   $correct_alusrc = $is_r ? ($alusrc == 1'b0) :
+                     ($is_ldur || $is_stur) ? ($alusrc == 1'b1) : 1'b1;
+
+   *failed = ! $correct_alusrc;
 
    // ---------- VIZ: diagram fetched by reference + glow overlays ----------
    \viz_js
       box: {left: 0, top: 0, width: 480, height: 372, fill: "#ffffff", stroke: "#cccccc", strokeWidth: 1},
 
       init() {
-         const PDF_URL = "https://controversial-ads-gentleman-workstation.trycloudflare.com/page361.pdf"
+         const PDF_URL = "https://completion-original-detective-annotated.trycloudflare.com/page361.pdf"
          const OFFX = 15, OFFY = 12
          const OR = "#ff7a00"
-         const GLOW_W = 1.7
 
-         // Primitive index groups (from the extractFigure dump). Wire + its arrowhead/dots.
+         // Primitive index groups (from extractFigure dump). Wires, arrowheads, and control lines.
          const PRIMS = {
             w_pc_imem: [42, 43, 59],
             w_pc_add: [46, 47],
@@ -100,11 +105,16 @@
             b_dmem: [2],
             b_sign: [19],
             b_alucl: [0],
-            x_c18: [18],
-            x_c50: [50],
-            x_c56: [56]
+            // Control line primitives mapped to vector paths
+            c_wire_reg2loc: [56],
+            c_wire_branch: [18],
+            c_wire_memread: [50],
+            c_wire_memtoreg: [68],
+            c_wire_memwrite: [54],
+            c_wire_alusrc: [1],
+            c_wire_regwrite: [50]
          }
-         // Label index groups (block names, control signal names, mux input digits).
+         // Label index groups
          const LABS = {
             t_regs: [4], t_alu: [5], t_add: [6], t_add_pc4: [20],
             t_sign: [12, 13], t_shift: [37, 38], t_imem: [42, 43], t_ctrl: [64],
@@ -114,105 +124,19 @@
             m_r0: [74], m_r1: [75], m_a0: [47], m_a1: [48],
             m_w1: [45], m_w0: [46], m_p0: [49], m_p1: [50]
          }
-         // Cyan (control) prims that get a dashed style.
-         const DASHED = ["w_zero", "w_alucl_out", "w_aluop", "x_c18", "x_c50", "x_c56"]
-         // Order of the 8 control outputs, top to bottom on the Control ellipse.
-         const CTRL_NAMES = ["reg2loc", "branch", "memread", "memtoreg", "aluop", "memwrite", "alusrc", "regwrite"]
 
          let figure = new fabric.Group([], {originX: "left", originY: "top", selectable: false, evented: false})
-         let ovl = new fabric.Group([], {originX: "left", originY: "top", selectable: false, evented: false})
          let status = new fabric.Text("loading diagram...", {left: 15, top: 332, fontSize: 11, fill: "#222222", fontFamily: "monospace"})
          let status2 = new fabric.Text("", {left: 15, top: 348, fontSize: 8, fill: "#555555", fontFamily: "monospace"})
          let credit = new fabric.Text("Diagram fetched at runtime from the PDF URL in the code (not copied into this file).", {left: 15, top: 362, fontSize: 6, fill: "#999999", fontFamily: "monospace"})
+         
+         // Extra segment: Instruction[4-0] bus from x=111 to Reg2Loc MUX branch point
+         let ex1 = new fabric.Line([0, 0, 1, 1], {stroke: OR, strokeWidth: 1.8, visible: false, selectable: false, evented: false})
 
          this._ready = false
          this._state = null
          this._fig = figure
-         this._ovl = ovl
-         this._ov = {}
-
-         // ---- Split an SVG path string into subpaths (M / L / C / Q / Z, absolute only) ----
-         const parseSubpaths = (d) => {
-            const toks = []
-            let buf = ""
-            for (let k = 0; k < d.length; k++) {
-               const ch = d.charAt(k)
-               const isLetter = (ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z")
-               if (isLetter) {
-                  if (buf !== "") { toks.push(buf); buf = "" }
-                  toks.push(ch)
-               } else if (ch === " " || ch === ",") {
-                  if (buf !== "") { toks.push(buf); buf = "" }
-               } else if (ch === "-") {
-                  if (buf !== "") { toks.push(buf); buf = "" }
-                  buf = "-"
-               } else {
-                  buf = buf + ch
-               }
-            }
-            if (buf !== "") { toks.push(buf) }
-
-            const subs = []
-            let cur = null
-            let cmd = ""
-            let i = 0
-            const num = () => parseFloat(toks[i++])
-            while (i < toks.length) {
-               const t = toks[i]
-               if (isNaN(parseFloat(t))) {
-                  cmd = t
-                  i++
-                  if ((cmd === "Z" || cmd === "z") && cur && cur.pts.length > 0) { cur.pts.push(cur.pts[0]) }
-                  continue
-               }
-               if (cmd === "M") {
-                  const x = num(); const y = num()
-                  cur = {pts: [[x, y]], curve: false}
-                  subs.push(cur)
-                  cmd = "L"
-               } else if (cmd === "L" && cur) {
-                  const x = num(); const y = num()
-                  cur.pts.push([x, y])
-               } else if (cmd === "C" && cur) {
-                  num(); num(); num(); num()
-                  const x = num(); const y = num()
-                  cur.curve = true
-                  cur.pts.push([x, y])
-               } else if (cmd === "Q" && cur) {
-                  num(); num()
-                  const x = num(); const y = num()
-                  cur.curve = true
-                  cur.pts.push([x, y])
-               } else {
-                  i++
-               }
-            }
-            return subs
-         }
-
-         // ---- Build a glow polyline (figure coords in, box coords out), centered on its geometry ----
-         const mkGlow = (res, ptsFig, dashed) => {
-            const pts = []
-            let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9
-            ptsFig.forEach((p) => {
-               const q = res.fig(p[0], p[1])
-               pts.push({x: q.x, y: q.y})
-               if (q.x < x0) { x0 = q.x }
-               if (q.y < y0) { y0 = q.y }
-               if (q.x > x1) { x1 = q.x }
-               if (q.y > y1) { y1 = q.y }
-            })
-            const poly = new fabric.Polyline(pts, {
-               fill: "transparent", stroke: OR, strokeWidth: GLOW_W,
-               strokeLineJoin: "round",
-               strokeDashArray: dashed ? [3, 2] : null,
-               originX: "center", originY: "center",
-               left: (x0 + x1) / 2, top: (y0 + y1) / 2,
-               selectable: false, evented: false, visible: false
-            })
-            ovl.addWithUpdate(poly)
-            return poly
-         }
+         this._ex1 = ex1
 
          this._paint = () => {
             if (!this._ready || !this._state) { return }
@@ -222,15 +146,20 @@
             const usesRn = R || L || ST
             const usesImm = L || ST || C
 
-            // Wires: recolor + thicken, keeping the line centered on its original position.
-            const lit = (name, on) => {
+            // Symmetric wire lighting helper with dashed control line support
+            const lit = (name, on, isControl = false) => {
                [].concat(E[name]).forEach((o) => {
                   if (!o) { return }
                   const b = o.__base
                   if (b.sw > 0) {
-                     const w = on ? Math.max(GLOW_W, b.sw + 0.9) : b.sw
-                     const d = w - b.sw
-                     o.set({stroke: on ? OR : b.stroke, strokeWidth: w, left: b.left - d / 2, top: b.top - d / 2})
+                     o.set({
+                        stroke: on ? OR : b.stroke,
+                        strokeWidth: on ? (isControl ? 1.5 : 1.8) : b.sw,
+                        strokeUniform: true,
+                        strokeLineCap: "round",
+                        strokeLineJoin: "round",
+                        strokeDashArray: isControl ? [4, 3] : null
+                     })
                   } else {
                      o.set({fill: on ? OR : b.fill})
                   }
@@ -238,7 +167,7 @@
                   if (o.group) { o.group.set({dirty: true}) }
                })
             }
-            // Labels: mode 1 = active (orange bold), 0 = normal, -1 = dimmed
+
             const tx = (name, mode) => {
                [].concat(E[name]).forEach((o) => {
                   if (!o) { return }
@@ -247,59 +176,62 @@
                   if (o.group) { o.group.set({dirty: true}) }
                })
             }
-            // Overlay polylines (control wires, extra segment)
-            const ov = (key, on) => {
-               if (this._ov[key]) { this._ov[key].set({visible: on, dirty: true}) }
-            }
 
             // Always-active fetch path
             lit("w_pc_imem", true); lit("w_pc_add", true); lit("w_four", true); lit("w_pcnext", true)
             lit("w_pc_all", true); lit("w_imem_out", true); lit("w_ctrl_in", true)
             lit("b_pc", true); lit("b_pcadd", true); lit("b_pcmux", true)
             tx("t_imem", 1); tx("t_ctrl", 1); tx("t_add_pc4", 1)
-            // PC mux input that wins
+            
+            // PC MUX input selection
             lit("w_pc4_arrow", !S.pcsrc)
             lit("w_br_in_arrow", C)
             lit("w_bradd_out", S.pcsrc)
             tx("m_p0", S.pcsrc ? -1 : 1); tx("m_p1", S.pcsrc ? 1 : -1)
-            // Register read
+            
+            // Register read phase
             tx("t_regs", 1)
             lit("w_rn", usesRn); lit("w_rd1", usesRn)
             lit("w_rt0", R); lit("w_rt1", ST || C)
             lit("b_r2mux", !L); lit("w_r2mux_out", !L)
             tx("m_r0", S.reg2loc ? -1 : 1); tx("m_r1", S.reg2loc ? 1 : -1)
-            ov("ex1", ST || C)
+            this._ex1.set({visible: (ST || C)})
+            
             // Sign-extend / shift / branch adder
             lit("w_sign_in", usesImm); lit("b_sign", usesImm); tx("t_sign", usesImm ? 1 : 0)
             lit("w_se_alu", usesImm); lit("w_se_alu_arrow", L || ST)
             lit("w_shift", C); lit("w_shift_out", C); tx("t_shift", C ? 1 : 0); tx("t_add", C ? 1 : 0)
-            // ALU side
+            
+            // ALU stage
             lit("w_rd2", R || C || ST); lit("w_rd2_arrow", R || C)
             lit("b_alumux", true); lit("w_alumux_out", true)
             tx("m_a0", S.alusrc ? -1 : 1); tx("m_a1", S.alusrc ? 1 : -1)
             tx("t_alu", 1)
             lit("b_alucl", true); tx("t_alucl", 1)
-            lit("w_aluop", true); lit("w_alucl_out", true); lit("w_alucl_in", R)
+            lit("w_aluop", true, true); lit("w_alucl_out", true, true); lit("w_alucl_in", R)
             lit("w_zero", C)
-            // Memory
+            
+            // Data Memory stage
             lit("w_alu_fork", R || L || ST)
             lit("w_alu_dmem", L || ST); lit("b_dmem", L || ST); tx("t_dmem", (L || ST) ? 1 : 0)
             lit("w_rd2_mem", ST); lit("w_dmem_rd", L)
-            // Write back
+            
+            // Write Back stage
             lit("w_alu_wb", R); lit("b_wbmux", R || L); lit("w_wb", R || L)
             tx("m_w0", S.memtoreg ? -1 : 1); tx("m_w1", S.memtoreg ? 1 : -1)
             lit("w_rd", S.regwrite)
-            // Control signal names + control wires light up when asserted
-            tx("c_reg2loc", S.reg2loc ? 1 : 0); tx("c_branch", S.branch ? 1 : 0)
-            tx("c_memread", S.memread ? 1 : 0); tx("c_memtoreg", S.memtoreg ? 1 : 0)
-            tx("c_aluop", 1); tx("c_memwrite", S.memwrite ? 1 : 0)
-            tx("c_alusrc", S.alusrc ? 1 : 0); tx("c_regwrite", S.regwrite ? 1 : 0)
-            ov("reg2loc", S.reg2loc); ov("branch", S.branch); ov("memread", S.memread)
-            ov("memtoreg", S.memtoreg); ov("memwrite", S.memwrite); ov("alusrc", S.alusrc)
-            ov("regwrite", S.regwrite)
+            
+            // Control Signals & Control Wires (Dashed overlays)
+            tx("c_reg2loc", S.reg2loc ? 1 : 0); lit("c_wire_reg2loc", S.reg2loc, true)
+            tx("c_branch", S.branch ? 1 : 0); lit("c_wire_branch", S.branch, true)
+            tx("c_memread", S.memread ? 1 : 0); lit("c_wire_memread", S.memread, true)
+            tx("c_memtoreg", S.memtoreg ? 1 : 0); lit("c_wire_memtoreg", S.memtoreg, true)
+            tx("c_aluop", 1)
+            tx("c_memwrite", S.memwrite ? 1 : 0); lit("c_wire_memwrite", S.memwrite, true)
+            tx("c_alusrc", S.alusrc ? 1 : 0); lit("c_wire_alusrc", S.alusrc, true)
+            tx("c_regwrite", S.regwrite ? 1 : 0); lit("c_wire_regwrite", S.regwrite, true)
 
             this._fig.set({dirty: true})
-            this._ovl.set({dirty: true})
             this.getCanvas().requestRenderAll()
          }
 
@@ -313,65 +245,21 @@
             labels: LABS
          }).then((res) => {
             this._el = res.elements
-
-            // Control lines become dashed so they read differently from data wires.
-            DASHED.forEach((k) => {
-               [].concat(this._el[k]).forEach((o) => {
-                  if (o) { o.set({strokeDashArray: [3, 2], dirty: true}) }
-               })
-            })
-            // Remember original look and position of every named primitive.
             Object.keys(PRIMS).forEach((k) => {
                [].concat(this._el[k]).forEach((o) => {
-                  if (o) { o.__base = {stroke: o.stroke, sw: o.strokeWidth, fill: o.fill, left: o.left, top: o.top} }
+                  if (o) { o.__base = {stroke: o.stroke, sw: o.strokeWidth, fill: o.fill} }
                })
             })
-
-            try {
-               // Extra segment: Instruction[4-0] bus from x=111 to the Reg2Loc mux branch point.
-               this._ov.ex1 = mkGlow(res, [[111, 200.8], [152.3, 200.8]], false)
-
-               // Find the 8 control wires: cyan subpaths that touch the Control ellipse.
-               const CYAN = "#00b9f2"
-               const near = (pt) => pt[0] >= 186 && pt[0] <= 197 && pt[1] >= 70 && pt[1] <= 150
-               const r1 = (v) => Math.round(v * 10) / 10
-               const found = []
-               const all = []
-               res.ext.primitives.forEach((p, pi) => {
-                  if (p.stroke !== CYAN || !p.d || pi === 0 || pi === 54) { return }
-                  parseSubpaths(p.d).forEach((sp) => {
-                     if (sp.pts.length < 2) { return }
-                     const a = sp.pts[0]
-                     const z = sp.pts[sp.pts.length - 1]
-                     all.push([pi, sp.curve ? "curve" : "line", sp.pts.length, r1(a[0]), r1(a[1]), r1(z[0]), r1(z[1])])
-                     if (sp.curve) { return }
-                     if (near(a)) { found.push({prim: pi, pts: sp.pts, y: a[1]}) }
-                     else if (near(z)) { found.push({prim: pi, pts: sp.pts.slice().reverse(), y: z[1]}) }
-                  })
-               })
-               found.sort((m, n) => m.y - n.y)
-
-               if (found.length === 8 && found[4].prim === 55) {
-                  CTRL_NAMES.forEach((nm, k) => {
-                     if (nm !== "aluop") { this._ov[nm] = mkGlow(res, found[k].pts, true) }
-                  })
-                  credit.set({text: "control-wire overlay: OK (8/8 found). Diagram fetched at runtime from the PDF URL (not copied here)."})
-               } else {
-                  console.log("CTRL_MAP_FAILED found=" + found.length + " all_cyan_subpaths=" + JSON.stringify(all))
-                  credit.set({text: "control-wire overlay: FAILED (found " + found.length + "/8), see console for CTRL_MAP_FAILED"})
-               }
-            } catch (e) {
-               console.error("overlay setup error:", e)
-               credit.set({text: "overlay setup error: " + e.message})
-            }
-
+            const A = res.fig(111, 200.8)
+            const B = res.fig(152.3, 200.8)
+            ex1.set({x1: A.x, y1: A.y, x2: B.x, y2: B.y})
             this._ready = true
             this._paint()
          }).catch((e) => {
             console.error("PDF extraction failed:", e)
          })
 
-         return {figure: figure, ovl: ovl, status: status, status2: status2, credit: credit}
+         return {figure: figure, ex1: ex1, status: status, status2: status2, credit: credit}
       },
 
       render() {
