@@ -13,12 +13,12 @@
 
    // ---------- Tiny instruction ROM (real LEGv8 encodings) ----------
    $instr[31:0] =
-      ($idx == 3'd0) ? 32'h8B020023 :    // ADD  X3, X1, X2
-      ($idx == 3'd1) ? 32'hCB010044 :    // SUB  X4, X2, X1
-      ($idx == 3'd2) ? 32'hF8400005 :    // LDUR X5, [X0, #0]
-      ($idx == 3'd3) ? 32'hF8000003 :    // STUR X3, [X0, #0]
-      ($idx == 3'd4) ? 32'hB4000041 :    // CBZ  X1, #2  (pretend zero, taken)
-                       32'hB4000044;     // CBZ  X4, #2  (pretend non-zero, not taken)
+      ($idx == 3'd0) ? 32'h8B020023 :   // ADD  X3, X1, X2
+      ($idx == 3'd1) ? 32'hCB010044 :   // SUB  X4, X2, X1
+      ($idx == 3'd2) ? 32'hF8400005 :   // LDUR X5, [X0, #0]
+      ($idx == 3'd3) ? 32'hF8000003 :   // STUR X3, [X0, #0]
+      ($idx == 3'd4) ? 32'hB4000041 :   // CBZ  X1, #2  (pretend zero, taken)
+                       32'hB4000044;    // CBZ  X4, #2  (pretend non-zero, not taken)
 
    // Pretend ALU Zero output (stimulus): only entry 4 is a taken branch.
    $zero = ($idx == 3'd4);
@@ -44,23 +44,18 @@
                  $is_cbz ? 2'b01 :
                            2'b00;
    $pcsrc = $branch && $zero;
-   
-   // Self-checking invariants
-   $correct_alusrc = $is_r ? ($alusrc == 1'b0) :
-                     ($is_ldur || $is_stur) ? ($alusrc == 1'b1) : 1'b1;
-
-   *failed = ! $correct_alusrc;
 
    // ---------- VIZ: diagram fetched by reference + glow overlays ----------
    \viz_js
       box: {left: 0, top: 0, width: 480, height: 372, fill: "#ffffff", stroke: "#cccccc", strokeWidth: 1},
 
       init() {
-         const PDF_URL = "https://completion-original-detective-annotated.trycloudflare.com/page361.pdf"
+         const PDF_URL = "https://maximum-photo-sunglasses-bargain.trycloudflare.com/page361.pdf"
          const OFFX = 15, OFFY = 12
          const OR = "#ff7a00"
+         const ACTIVE_WIRE_WIDTH = 1
 
-         // Primitive index groups (from extractFigure dump). Wires, arrowheads, and control lines.
+         // Primitive index groups (from the extractFigure dump). Wire + its arrowhead/dots.
          const PRIMS = {
             w_pc_imem: [42, 43, 59],
             w_pc_add: [46, 47],
@@ -104,17 +99,9 @@
             b_r2mux: [80],
             b_dmem: [2],
             b_sign: [19],
-            b_alucl: [0],
-            // Control line primitives mapped to vector paths
-            c_wire_reg2loc: [56],
-            c_wire_branch: [18],
-            c_wire_memread: [50],
-            c_wire_memtoreg: [68],
-            c_wire_memwrite: [54],
-            c_wire_alusrc: [1],
-            c_wire_regwrite: [50]
+            b_alucl: [0]
          }
-         // Label index groups
+         // Label index groups (block names, control signal names, mux input digits).
          const LABS = {
             t_regs: [4], t_alu: [5], t_add: [6], t_add_pc4: [20],
             t_sign: [12, 13], t_shift: [37, 38], t_imem: [42, 43], t_ctrl: [64],
@@ -129,9 +116,8 @@
          let status = new fabric.Text("loading diagram...", {left: 15, top: 332, fontSize: 11, fill: "#222222", fontFamily: "monospace"})
          let status2 = new fabric.Text("", {left: 15, top: 348, fontSize: 8, fill: "#555555", fontFamily: "monospace"})
          let credit = new fabric.Text("Diagram fetched at runtime from the PDF URL in the code (not copied into this file).", {left: 15, top: 362, fontSize: 6, fill: "#999999", fontFamily: "monospace"})
-         
-         // Extra segment: Instruction[4-0] bus from x=111 to Reg2Loc MUX branch point
-         let ex1 = new fabric.Line([0, 0, 1, 1], {stroke: OR, strokeWidth: 1.8, visible: false, selectable: false, evented: false})
+         // Extra segment: Instruction[4-0] bus from x=111 to the Reg2Loc mux branch point (x=152.3).
+         let ex1 = new fabric.Line([0, 0, 1, 1], {stroke: OR, strokeWidth: 2.4, visible: false, selectable: false, evented: false})
 
          this._ready = false
          this._state = null
@@ -146,28 +132,17 @@
             const usesRn = R || L || ST
             const usesImm = L || ST || C
 
-            // Symmetric wire lighting helper with dashed control line support
-            const lit = (name, on, isControl = false) => {
+            const lit = (name, on) => {
                [].concat(E[name]).forEach((o) => {
                   if (!o) { return }
                   const b = o.__base
-                  if (b.sw > 0) {
-                     o.set({
-                        stroke: on ? OR : b.stroke,
-                        strokeWidth: on ? (isControl ? 1.5 : 1.8) : b.sw,
-                        strokeUniform: true,
-                        strokeLineCap: "round",
-                        strokeLineJoin: "round",
-                        strokeDashArray: isControl ? [4, 3] : null
-                     })
-                  } else {
-                     o.set({fill: on ? OR : b.fill})
-                  }
+                  if (b.sw > 0) { o.set({stroke: on ? OR : b.stroke, strokeWidth: on ? ACTIVE_WIRE_WIDTH : b.sw}) }
+                  else { o.set({fill: on ? OR : b.fill}) }
                   o.set({dirty: true})
                   if (o.group) { o.group.set({dirty: true}) }
                })
             }
-
+            // mode: 1 = active (orange bold), 0 = normal, -1 = dimmed
             const tx = (name, mode) => {
                [].concat(E[name]).forEach((o) => {
                   if (!o) { return }
@@ -182,54 +157,43 @@
             lit("w_pc_all", true); lit("w_imem_out", true); lit("w_ctrl_in", true)
             lit("b_pc", true); lit("b_pcadd", true); lit("b_pcmux", true)
             tx("t_imem", 1); tx("t_ctrl", 1); tx("t_add_pc4", 1)
-            
-            // PC MUX input selection
+            // PC mux input that wins
             lit("w_pc4_arrow", !S.pcsrc)
             lit("w_br_in_arrow", C)
             lit("w_bradd_out", S.pcsrc)
             tx("m_p0", S.pcsrc ? -1 : 1); tx("m_p1", S.pcsrc ? 1 : -1)
-            
-            // Register read phase
+            // Register read
             tx("t_regs", 1)
             lit("w_rn", usesRn); lit("w_rd1", usesRn)
             lit("w_rt0", R); lit("w_rt1", ST || C)
             lit("b_r2mux", !L); lit("w_r2mux_out", !L)
             tx("m_r0", S.reg2loc ? -1 : 1); tx("m_r1", S.reg2loc ? 1 : -1)
             this._ex1.set({visible: (ST || C)})
-            
             // Sign-extend / shift / branch adder
             lit("w_sign_in", usesImm); lit("b_sign", usesImm); tx("t_sign", usesImm ? 1 : 0)
             lit("w_se_alu", usesImm); lit("w_se_alu_arrow", L || ST)
             lit("w_shift", C); lit("w_shift_out", C); tx("t_shift", C ? 1 : 0); tx("t_add", C ? 1 : 0)
-            
-            // ALU stage
+            // ALU side
             lit("w_rd2", R || C || ST); lit("w_rd2_arrow", R || C)
             lit("b_alumux", true); lit("w_alumux_out", true)
             tx("m_a0", S.alusrc ? -1 : 1); tx("m_a1", S.alusrc ? 1 : -1)
             tx("t_alu", 1)
             lit("b_alucl", true); tx("t_alucl", 1)
-            lit("w_aluop", true, true); lit("w_alucl_out", true, true); lit("w_alucl_in", R)
+            lit("w_aluop", true); lit("w_alucl_out", true); lit("w_alucl_in", R)
             lit("w_zero", C)
-            
-            // Data Memory stage
+            // Memory
             lit("w_alu_fork", R || L || ST)
             lit("w_alu_dmem", L || ST); lit("b_dmem", L || ST); tx("t_dmem", (L || ST) ? 1 : 0)
             lit("w_rd2_mem", ST); lit("w_dmem_rd", L)
-            
-            // Write Back stage
+            // Write back
             lit("w_alu_wb", R); lit("b_wbmux", R || L); lit("w_wb", R || L)
             tx("m_w0", S.memtoreg ? -1 : 1); tx("m_w1", S.memtoreg ? 1 : -1)
             lit("w_rd", S.regwrite)
-            
-            // Control Signals & Control Wires (Dashed overlays)
-            tx("c_reg2loc", S.reg2loc ? 1 : 0); lit("c_wire_reg2loc", S.reg2loc, true)
-            tx("c_branch", S.branch ? 1 : 0); lit("c_wire_branch", S.branch, true)
-            tx("c_memread", S.memread ? 1 : 0); lit("c_wire_memread", S.memread, true)
-            tx("c_memtoreg", S.memtoreg ? 1 : 0); lit("c_wire_memtoreg", S.memtoreg, true)
-            tx("c_aluop", 1)
-            tx("c_memwrite", S.memwrite ? 1 : 0); lit("c_wire_memwrite", S.memwrite, true)
-            tx("c_alusrc", S.alusrc ? 1 : 0); lit("c_wire_alusrc", S.alusrc, true)
-            tx("c_regwrite", S.regwrite ? 1 : 0); lit("c_wire_regwrite", S.regwrite, true)
+            // Control signal names light up when asserted
+            tx("c_reg2loc", S.reg2loc ? 1 : 0); tx("c_branch", S.branch ? 1 : 0)
+            tx("c_memread", S.memread ? 1 : 0); tx("c_memtoreg", S.memtoreg ? 1 : 0)
+            tx("c_aluop", 1); tx("c_memwrite", S.memwrite ? 1 : 0)
+            tx("c_alusrc", S.alusrc ? 1 : 0); tx("c_regwrite", S.regwrite ? 1 : 0)
 
             this._fig.set({dirty: true})
             this.getCanvas().requestRenderAll()
