@@ -1,29 +1,30 @@
 \m5_TLV_version 1d: tl-x.org
 \m5
+   //blaw 
    use(m5-1.0)
 \SV
    m5_makerchip_module
 \TLV
    $reset = *reset;
 
-   // ---------- Instruction sequencer: cycles through 6 test instructions ----------
-   $idx[2:0] = $reset ? 3'd5 :
-               (>>1$idx == 3'd5) ? 3'd0 :
-                                   >>1$idx + 3'd1;
+   // ---------- PC Register & Next PC Mux ----------
+   $pc_plus_4[63:0] = >>1$pc + 64'd4;
+   $branch_target[63:0] = >>1$pc + ($sign_ext_imm << 2);
+   
+   $pc[63:0] = $reset ? 64'd0 :
+               >>1$pcsrc ? >>1$branch_target :
+                           $pc_plus_4;
 
-   // ---------- Tiny instruction ROM (real LEGv8 encodings) ----------
+   // ---------- Instruction ROM ----------
    $instr[31:0] =
-      ($idx == 3'd0) ? 32'h8B020023 :   // ADD  X3, X1, X2
-      ($idx == 3'd1) ? 32'hCB010044 :   // SUB  X4, X2, X1
-      ($idx == 3'd2) ? 32'hF8400005 :   // LDUR X5, [X0, #0]
-      ($idx == 3'd3) ? 32'hF8000003 :   // STUR X3, [X0, #0]
-      ($idx == 3'd4) ? 32'hB4000041 :   // CBZ  X1, #2  (pretend zero, taken)
-                       32'hB4000044;    // CBZ  X4, #2  (pretend non-zero, not taken)
+      ($pc[5:2] == 4'd3) ? 32'h8B030041 :   // ADD  X1, X2, X3
+      ($pc[5:2] == 4'd2) ? 32'hCB010044 :   // SUB  X4, X2, X1
+      ($pc[5:2] == 4'd4) ? 32'hF8400005 :   // LDUR X5, [X0, #0]
+      ($pc[5:2] == 4'd5) ? 32'hF8000003 :   // STUR X3, [X0, #0]
+      ($pc[5:2] == 4'd6) ? 32'hB4000041 :   // CBZ  X1, #2
+                           32'hB4000044;   // CBZ  X4, #2
 
-   // Pretend ALU Zero output (stimulus): only entry 4 is a taken branch.
-   $zero = ($idx == 3'd4);
-
-   // ---------- Decode ----------
+   // ---------- Decode & Field Slicing ----------
    $op11[10:0] = $instr[31:21];
    $is_add  = ($op11 == 11'b10001011000);
    $is_sub  = ($op11 == 11'b11001011000);
@@ -32,7 +33,16 @@
    $is_cbz  = ($instr[31:24] == 8'b10110100);
    $is_r    = $is_add || $is_sub;
 
-   // ---------- Control unit ----------
+   // Register Field Extraction
+   $rn[4:0] = $instr[9:5];                  // Read Reg 1
+   $rm[4:0] = $instr[20:16];                 // Read Reg 2 candidate 1
+   $rt[4:0] = $instr[4:0];                  // Read Reg 2 candidate 2 / Write Reg
+
+   // Immediate Sign Extension (for CBZ)
+   $imm19[18:0] = $instr[23:5];
+   $sign_ext_imm[63:0] = {{45{$imm19[18]}}, $imm19};
+
+   // ---------- Control Unit ----------
    $reg2loc  = $is_stur || $is_cbz;
    $alusrc   = $is_ldur || $is_stur;
    $memtoreg = $is_ldur;
@@ -43,6 +53,12 @@
    $aluop[1:0] = $is_r   ? 2'b10 :
                  $is_cbz ? 2'b01 :
                            2'b00;
+
+   // Read Register 2 Mux
+   $read_reg2[4:0] = $reg2loc ? $rt : $rm;
+
+   // Pretend ALU Zero output for testing branch taken
+   $zero = ($pc[5:2] == 4'd4);
    $pcsrc = $branch && $zero;
 
    // ---------- VIZ: diagram fetched by reference + glow overlays ----------
@@ -50,7 +66,7 @@
       box: {left: 0, top: 0, width: 480, height: 372, fill: "#ffffff", stroke: "#cccccc", strokeWidth: 1},
 
       init() {
-         const PDF_URL = "https://maximum-photo-sunglasses-bargain.trycloudflare.com/page361.pdf"
+         const PDF_URL = "https://star-being-proportion-professor.trycloudflare.com/page361.pdf"
          const OFFX = 15, OFFY = 12
          const OR = "#ff7a00"
          const ACTIVE_WIRE_WIDTH = 1
@@ -226,35 +242,51 @@
          return {figure: figure, ex1: ex1, status: status, status2: status2, credit: credit}
       },
 
-      render() {
-         const NAMES = ["ADD X3,X1,X2  (R-type)", "SUB X4,X2,X1  (R-type)", "LDUR X5,[X0,#0]  (load)",
-                        "STUR X3,[X0,#0]  (store)", "CBZ X1,#2  (branch TAKEN)", "CBZ X4,#2  (branch not taken)"]
-         let idx = '$idx'.asInt(0)
+         render() {
+         // Fetch raw instruction hex directly from the TL-Verilog signal!
+         let raw_instr = this.sigRef(`$instr`, 0).asBigInt(0n)
+         let pc_big    = this.sigRef(`$pc`, 0).asBigInt(0n)
+
          let S = {
-            r: '$is_r'.asInt(0) == 1,
-            ld: '$is_ldur'.asInt(0) == 1,
-            st: '$is_stur'.asInt(0) == 1,
-            cb: '$is_cbz'.asInt(0) == 1,
-            reg2loc: '$reg2loc'.asInt(0) == 1,
-            alusrc: '$alusrc'.asInt(0) == 1,
-            memtoreg: '$memtoreg'.asInt(0) == 1,
-            regwrite: '$regwrite'.asInt(0) == 1,
-            memread: '$memread'.asInt(0) == 1,
-            memwrite: '$memwrite'.asInt(0) == 1,
-            branch: '$branch'.asInt(0) == 1,
-            pcsrc: '$pcsrc'.asInt(0) == 1
+            r:        this.sigRef(`$is_r`, 0).asInt(0) == 1,
+            ld:       this.sigRef(`$is_ldur`, 0).asInt(0) == 1,
+            st:       this.sigRef(`$is_stur`, 0).asInt(0) == 1,
+            cb:       this.sigRef(`$is_cbz`, 0).asInt(0) == 1,
+            reg2loc:  this.sigRef(`$reg2loc`, 0).asInt(0) == 1,
+            alusrc:   this.sigRef(`$alusrc`, 0).asInt(0) == 1,
+            memtoreg: this.sigRef(`$memtoreg`, 0).asInt(0) == 1,
+            regwrite: this.sigRef(`$regwrite`, 0).asInt(0) == 1,
+            memread:  this.sigRef(`$memread`, 0).asInt(0) == 1,
+            memwrite: this.sigRef(`$memwrite`, 0).asInt(0) == 1,
+            branch:   this.sigRef(`$branch`, 0).asInt(0) == 1,
+            pcsrc:    this.sigRef(`$pcsrc`, 0).asInt(0) == 1
          }
-         let aluop = '$aluop'.asInt(0)
-         let zero = '$zero'.asInt(0)
+         let aluop = this.sigRef(`$aluop`, 0).asInt(0)
+         let zero  = this.sigRef(`$zero`, 0).asInt(0)
          this._state = S
 
+         // Dynamic instruction type disassembler string
+         let inst_type = S.r  ? "R-type" :
+                         S.ld ? "LDUR (load)" :
+                         S.st ? "STUR (store)" :
+                         S.cb ? "CBZ (branch)" : "UNKNOWN / NOP"
+
+         let hex_str = "0x" + raw_instr.toString(16).padStart(8, "0").toUpperCase()
+
          const b = (v) => v ? 1 : 0
-         this.getObjects().status.set({text: NAMES[Math.min(idx, 5)]})
-         this.getObjects().status2.set({text:
+
+         // Status banner now updates dynamically based on $instr!
+         this.getObjects().status.set({ 
+            text: "PC: 0x" + pc_big.toString(16).toUpperCase() + " | INSTR: " + hex_str + " (" + inst_type + ")"
+         })
+
+         this.getObjects().status2.set({ text:
             "Reg2Loc=" + b(S.reg2loc) + " ALUSrc=" + b(S.alusrc) + " MemtoReg=" + b(S.memtoreg) +
             " RegWrite=" + b(S.regwrite) + " MemRead=" + b(S.memread) + " MemWrite=" + b(S.memwrite) +
             " Branch=" + b(S.branch) + " ALUOp=" + aluop.toString(2).padStart(2, "0") +
-            " Zero=" + zero + " PCSrc=" + b(S.pcsrc)})
+            " Zero=" + zero + " PCSrc=" + b(S.pcsrc)
+         })
+
          this._paint()
          return []
       }
