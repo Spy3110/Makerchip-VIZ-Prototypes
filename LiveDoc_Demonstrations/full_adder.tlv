@@ -28,7 +28,7 @@
          widgets.figure = figure
 
          widgets.caption = new fabric.Text(
-            "Figure 4.8 — fulladder synthesized circuit",
+            "Harris & Harris Figure 4.8 — fulladder synthesized circuit",
             {left: 18, top: 8, fontSize: 10, fontFamily: "Roboto", fill: "#555"}
          )
          widgets.loading = new fabric.Text(
