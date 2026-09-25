@@ -19,7 +19,7 @@
    $instr[31:0] =
       ($pc[5:2] == 4'd3) ? 32'h8B030041 :   // ADD  X1, X2, X3
       ($pc[5:2] == 4'd2) ? 32'hCB010044 :   // SUB  X4, X2, X1
-      ($pc[5:2] == 4'd4) ? 32'hF8400005 :   // LDUR X5, [X0, #0]
+      ($pc[5:2] == 4'd4) ? 32'hF84C8021 :   // LDUR X1, [X1, #200]
       ($pc[5:2] == 4'd5) ? 32'hF8000003 :   // STUR X3, [X0, #0]
       ($pc[5:2] == 4'd6) ? 32'hB4000041 :   // CBZ  X1, #2
                            32'hB4000044;   // CBZ  X4, #2
@@ -50,7 +50,7 @@
    $memread  = $is_ldur;
    $memwrite = $is_stur;
    $branch   = $is_cbz;
-   $aluop[1:0] = $is_r   ? 2'b10 :
+   $aluop[1:0] = $is_r   ? 2'b11 :
                  $is_cbz ? 2'b01 :
                            2'b00;
 
@@ -66,7 +66,7 @@
       box: {left: 0, top: 0, width: 480, height: 372, fill: "#ffffff", stroke: "#cccccc", strokeWidth: 1},
 
       init() {
-         const PDF_URL = "https://star-being-proportion-professor.trycloudflare.com/page361.pdf"
+         const PDF_URL = "https://bryan-forums-friend-harbor.trycloudflare.com/page361.pdf"
          const OFFX = 15, OFFY = 12
          const OR = "#ff7a00"
          const ACTIVE_WIRE_WIDTH = 1
@@ -238,15 +238,30 @@
          }).catch((e) => {
             console.error("PDF extraction failed:", e)
          })
+         let pcBubble = new fabric.Text("PC=0x0", {
+            left: 38, top: 200, fontSize: 9, fontFamily: "monospace", fill: "#FF0000"
+         })
+         let aluOpBubble = new fabric.Text("ALUOp=00", {
+            left: 300, top: 290, fontSize: 9, fontFamily: "monospace", fill: "#FF0000"
+         })
+         let nextPcDot = new fabric.Circle({
+            left: 385, top: 40, radius: 9,
+            fill: "#ffffff", stroke: "#aaaaaa", strokeWidth: 1
+         })
+         let nextPcTxt = new fabric.Text("?", {
+            left: 387, top: 46, fontSize: 6, fontFamily: "monospace", fill: "#FF0000"
+         })
 
-         return {figure: figure, ex1: ex1, status: status, status2: status2, credit: credit}
+         return {figure: figure, ex1: ex1, status: status, status2: status2, credit: credit,
+        pcBubble: pcBubble, aluOpBubble: aluOpBubble,
+        nextPcDot: nextPcDot, nextPcTxt: nextPcTxt}
       },
 
          render() {
          // Fetch raw instruction hex directly from the TL-Verilog signal!
          let raw_instr = this.sigRef(`$instr`, 0).asBigInt(0n)
          let pc_big    = this.sigRef(`$pc`, 0).asBigInt(0n)
-
+         
          let S = {
             r:        this.sigRef(`$is_r`, 0).asInt(0) == 1,
             ld:       this.sigRef(`$is_ldur`, 0).asInt(0) == 1,
@@ -261,6 +276,9 @@
             branch:   this.sigRef(`$branch`, 0).asInt(0) == 1,
             pcsrc:    this.sigRef(`$pcsrc`, 0).asInt(0) == 1
          }
+         let branchTargetBig = this.sigRef(`$branch_target`, 0).asBigInt(0n)
+         let nextPc = S.pcsrc ? branchTargetBig : (pc_big + 4n)
+
          let aluop = this.sigRef(`$aluop`, 0).asInt(0)
          let zero  = this.sigRef(`$zero`, 0).asInt(0)
          this._state = S
@@ -286,6 +304,10 @@
             " Branch=" + b(S.branch) + " ALUOp=" + aluop.toString(2).padStart(2, "0") +
             " Zero=" + zero + " PCSrc=" + b(S.pcsrc)
          })
+         this.getObjects().pcBubble.set({text: "PC=0x" + pc_big.toString(16).toUpperCase()})
+         this.getObjects().aluOpBubble.set({text: "ALUOp=" + aluop.toString(2).padStart(2, "0")})
+         this.getObjects().nextPcDot.set({fill: S.pcsrc ? "#ffc09a" : "#ffffff"})
+         this.getObjects().nextPcTxt.set({text: "0x" + nextPc.toString(16).toUpperCase()})
 
          this._paint()
          return []
