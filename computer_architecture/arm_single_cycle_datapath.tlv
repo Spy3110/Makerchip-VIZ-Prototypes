@@ -1,6 +1,7 @@
 \m5_TLV_version 1d: tl-x.org
 \m5
-   //blaw 
+   //I gotta write expression for ALU Control as well that how is it implemented.
+   //lec 11, 48 min
    use(m5-1.0)
 \SV
    m5_makerchip_module
@@ -21,7 +22,7 @@
       ($pc[5:2] == 4'd2) ? 32'hCB010044 :   // SUB  X4, X2, X1
       ($pc[5:2] == 4'd4) ? 32'hF84C8021 :   // LDUR X1, [X1, #200]
       ($pc[5:2] == 4'd5) ? 32'hF8000003 :   // STUR X3, [X0, #0]
-      ($pc[5:2] == 4'd6) ? 32'hB4000041 :   // CBZ  X1, #2
+      ($pc[5:2] == 4'd6) ? 32'hB4000C81 :   // CBZ  X1, #100
                            32'hB4000044;   // CBZ  X4, #2
 
    // ---------- Decode & Field Slicing ----------
@@ -66,7 +67,7 @@
       box: {left: 0, top: 0, width: 480, height: 372, fill: "#ffffff", stroke: "#cccccc", strokeWidth: 1},
 
       init() {
-         const PDF_URL = "https://bryan-forums-friend-harbor.trycloudflare.com/page361.pdf"
+         const PDF_URL = "https://ethics-reported-drove-jefferson.trycloudflare.com/page361.pdf"
          const OFFX = 15, OFFY = 12
          const OR = "#ff7a00"
          const ACTIVE_WIRE_WIDTH = 1
@@ -306,7 +307,7 @@
          })
          this.getObjects().pcBubble.set({text: "PC=0x" + pc_big.toString(16).toUpperCase()})
          this.getObjects().aluOpBubble.set({text: "ALUOp=" + aluop.toString(2).padStart(2, "0")})
-         this.getObjects().nextPcDot.set({fill: S.pcsrc ? "#ffc09a" : "#ffffff"})
+         this.getObjects().nextPcDot.set({fill: S.pcsrc ? "#ffc09a" : "#FFC0CB"})
          this.getObjects().nextPcTxt.set({text: "0x" + nextPc.toString(16).toUpperCase()})
 
          this._paint()
