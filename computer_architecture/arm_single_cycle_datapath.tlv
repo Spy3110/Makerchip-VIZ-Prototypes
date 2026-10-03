@@ -70,7 +70,7 @@
                        $RETAIN;
 
    $rs1_data[63:0] = ($rn == 5'd31) ? 64'b0 : /xreg[$rn]$val; //i didnt quite get it...
-   $rs2_data[63:0] = ($rm == 5'd31) ? 64'b0 : /xreg[$read_reg2]$val;
+   $rs2_data[63:0] = ($read_reg2 == 5'd31) ? 64'b0 : /xreg[$read_reg2]$val;
    
    //We want to write data to register.
    $wr_data[63:0] = $memtoreg ? $dmem_rd_data : $alu_result;
@@ -305,19 +305,32 @@
          })
          let alu_ctrlTxt = new fabric.Text("?", {
             left: 310, top: 225, fontSize: 6, fontFamily: "monospace", fill: "#FF0000"
-         }) //<-- this one, I added and broke VIZ
+         }) 
+         let rnTxt = new fabric.Text("Rn:00000", {
+            left: 130, top: 155, fontSize: 6, fontFamily: "monospace", fill: "#FF0000"
+         })
+         let rmTxt = new fabric.Text("Rm:00000", {
+            left: 130, top: 185, fontSize: 6, fontFamily: "monospace", fill: "#FF0000"
+         })
+         let rtTxt = new fabric.Text("Rt:00000", {
+            left: 130, top: 205, fontSize: 6, fontFamily: "monospace", fill: "#FF0000"
+         })
 
          return {figure: figure, ex1: ex1, status: status, status2: status2, credit: credit,
         pcBubble: pcBubble, aluOpBubble: aluOpBubble,
         nextPcDot: nextPcDot, nextPcTxt: nextPcTxt,
-        alu_ctrlTxt: alu_ctrlTxt} //<-- this one, I added and broke VIZ
+        alu_ctrlTxt: alu_ctrlTxt, rnTxt: rnTxt,
+        rmTxt: rmTxt, rtTxt: rtTxt} 
       },
 
          render() {
          // Fetch raw instruction hex directly from the TL-Verilog signal!
          let raw_instr = this.sigRef(`$instr`, 0).asBigInt(0n)
          let pc_big    = this.sigRef(`$pc`, 0).asBigInt(0n)
-         let alu_ctrl = this.sigRef(`$alu_ctrl`,0).asInt(0) //<-- this one, I added and broke VIZ
+         let alu_ctrl = this.sigRef(`$alu_ctrl`,0).asInt(0)
+         let rn = this.sigRef(`$rn`, 0).asInt(0)
+         let rm = this.sigRef(`$rm`, 0).asInt(0)
+         let rt = this.sigRef(`$rt`, 0).asInt(0)
          
          let S = {
             r:        this.sigRef(`$is_r`, 0).asInt(0) == 1,
@@ -365,7 +378,10 @@
          this.getObjects().aluOpBubble.set({text: "ALUOp=" + aluop.toString(2).padStart(2, "0")})
          this.getObjects().nextPcDot.set({fill: S.pcsrc ? "#ffc09a" : "#ffffff"})
          this.getObjects().nextPcTxt.set({text: "0x" + nextPc.toString(16).toUpperCase()})
-         this.getObjects().alu_ctrlTxt.set({text: "Ctrl:" + alu_ctrl.toString(2).padStart(4, "0")}) //<-- this one, I added and broke VIZ
+         this.getObjects().alu_ctrlTxt.set({text: "Ctrl:" + alu_ctrl.toString(2).padStart(4, "0")}) 
+         this.getObjects().rnTxt.set({text: "Rn:" + rn.toString(2).padStart(5, "0")})
+         this.getObjects().rmTxt.set({text: "Rm:" + rm.toString(2).padStart(5, "0")})
+         this.getObjects().rtTxt.set({text: "Rt:" + rt.toString(2).padStart(5, "0")})
 
          this._paint()
          return []
