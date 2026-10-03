@@ -1,7 +1,6 @@
 \m5_TLV_version 1d: tl-x.org
 \m5
-   //I gotta write expression for ALU Control as well that how is it implemented.
-   //lec 11, 48 min
+   //blaw 
    use(m5-1.0)
 \SV
    m5_makerchip_module
@@ -9,20 +8,19 @@
    $reset = *reset;
 
    // ---------- PC Register & Next PC Mux ----------
-   $pc_plus_4[63:0] = >>1$pc + 64'd4;
-   $branch_target[63:0] = >>1$pc + ($sign_ext_imm << 2);
-   
    $pc[63:0] = $reset ? 64'd0 :
                >>1$pcsrc ? >>1$branch_target :
                            $pc_plus_4;
-
+   $pc_plus_4[63:0] = >>1$pc + 64'd4;
+   $branch_target[63:0] = >>1$pc + ($sign_ext_imm << 2);
+   
    // ---------- Instruction ROM ----------
    $instr[31:0] =
       ($pc[5:2] == 4'd3) ? 32'h8B030041 :   // ADD  X1, X2, X3
       ($pc[5:2] == 4'd2) ? 32'hCB010044 :   // SUB  X4, X2, X1
       ($pc[5:2] == 4'd4) ? 32'hF84C8021 :   // LDUR X1, [X1, #200]
       ($pc[5:2] == 4'd5) ? 32'hF8000003 :   // STUR X3, [X0, #0]
-      ($pc[5:2] == 4'd6) ? 32'hB4000C81 :   // CBZ  X1, #100
+      ($pc[5:2] == 4'd6) ? 32'hB4000041 :   // CBZ  X1, #2
                            32'hB4000044;   // CBZ  X4, #2
 
    // ---------- Decode & Field Slicing ----------
@@ -35,39 +33,92 @@
    $is_r    = $is_add || $is_sub;
 
    // Register Field Extraction
-   $rn[4:0] = $instr[9:5];                  // Read Reg 1
-   $rm[4:0] = $instr[20:16];                 // Read Reg 2 candidate 1
-   $rt[4:0] = $instr[4:0];                  // Read Reg 2 candidate 2 / Write Reg
+   $rn[4:0] = $instr[9:5];     // Read Reg 1
+   $rm[4:0] = $instr[20:16];   // Read Reg 2 candidate 1
+   $rt[4:0] = $instr[4:0];     // Read Reg 2 candidate 2 / Write Reg
 
    // Immediate Sign Extension (for CBZ)
    $imm19[18:0] = $instr[23:5];
    $sign_ext_imm[63:0] = {{45{$imm19[18]}}, $imm19};
+   //for LDUR/STUR
+   $imm9_ext[63:0] = {{55{$instr[20]}}, $instr[20:12]};
 
    // ---------- Control Unit ----------
    $reg2loc  = $is_stur || $is_cbz;
-   $alusrc   = $is_ldur || $is_stur;
-   $memtoreg = $is_ldur;
-   $regwrite = $is_r || $is_ldur;
-   $memread  = $is_ldur;
-   $memwrite = $is_stur;
    $branch   = $is_cbz;
-   $aluop[1:0] = $is_r   ? 2'b11 :
+   $memread  = $is_ldur;
+   $memtoreg = $is_ldur;
+   $memwrite = $is_stur;
+   $alusrc   = $is_ldur || $is_stur;
+   $regwrite = $is_r || $is_ldur;
+   $aluop[1:0] = $is_r   ? 2'b10 :
                  $is_cbz ? 2'b01 :
                            2'b00;
 
    // Read Register 2 Mux
    $read_reg2[4:0] = $reg2loc ? $rt : $rm;
-
-   // Pretend ALU Zero output for testing branch taken
-   $zero = ($pc[5:2] == 4'd4);
+   
    $pcsrc = $branch && $zero;
+   
+   //-----the register file--------
+   /xreg[31:0]
+      $wr_en = /top>>1$regwrite &&
+               (/top>>1$rt == #xreg) &&
+               (#xreg != 5'b11111);
+      $val[63:0] = (/top$reset) ? 64'b0 :
+                   $wr_en  ? /top>>1$wr_data :
+                       $RETAIN;
+
+   $rs1_data[63:0] = ($rn == 5'd31) ? 64'b0 : /xreg[$rn]$val; //i didnt quite get it...
+   $rs2_data[63:0] = ($rm == 5'd31) ? 64'b0 : /xreg[$read_reg2]$val;
+   
+   //We want to write data to register.
+   $wr_data[63:0] = $memtoreg ? $dmem_rd_data : $alu_result;
+   
+   
+   //----------ALU control-----------
+   $alu_ctrl[3:0] = ($aluop == 2'b00) ? 4'b0010 : //D format: ADD
+                    ($aluop == 2'b01) ? 4'b0011 : //CBZ: Pass-B
+                    $instr[30]        ? 4'b0110 : //SUB
+                    $instr[29]        ? 4'b0001 : //ORR
+                    $instr[24]        ? 4'b0010 : //ADD
+                                        4'b0000; //AND
+   
+   //-----the ALU------------ 
+   //the first input is rs1_data, so should not be confused.
+   $alu_in2[63:0] = ($alusrc == 1'b1) ? $imm9_ext : $rs2_data;
+   
+   //actions
+   $and[63:0] = $rs1_data & $alu_in2;
+   $orr[63:0] = $rs1_data | $alu_in2;
+   $add[63:0] = $rs1_data + $alu_in2;
+   $sub[63:0] = $rs1_data - $alu_in2;
+   
+   //result
+   $alu_result[63:0] = ($alu_ctrl == 4'b0000) ? $and :
+                       ($alu_ctrl == 4'b0001) ? $orr :
+                       ($alu_ctrl == 4'b0010) ? $add :
+                       ($alu_ctrl == 4'b0110) ? $sub :
+                       ($alu_ctrl == 4'b0011) ? $alu_in2 :
+                                                64'b0;
+   
+   $zero = ($alu_result == 64'b0);
+   
+   //------data memory--------
+   /dmem[63:0]
+      $wr_en = /top>>1$memwrite && (/top>>1$alu_result[5:0] == #dmem);
+      $val[63:0] = (/top$reset) ? 64'b0 :
+                $wr_en  ? /top>>1$rs2_data :
+                          $RETAIN;
+
+   $dmem_rd_data[63:0] = /dmem[$alu_result[5:0]]$val;
 
    // ---------- VIZ: diagram fetched by reference + glow overlays ----------
    \viz_js
       box: {left: 0, top: 0, width: 480, height: 372, fill: "#ffffff", stroke: "#cccccc", strokeWidth: 1},
 
       init() {
-         const PDF_URL = "https://ethics-reported-drove-jefferson.trycloudflare.com/page361.pdf"
+         const PDF_URL = "https://dans-extending-affordable-editorials.trycloudflare.com/page361.pdf"
          const OFFX = 15, OFFY = 12
          const OR = "#ff7a00"
          const ACTIVE_WIRE_WIDTH = 1
@@ -252,16 +303,21 @@
          let nextPcTxt = new fabric.Text("?", {
             left: 387, top: 46, fontSize: 6, fontFamily: "monospace", fill: "#FF0000"
          })
+         let alu_ctrlTxt = new fabric.Text("?", {
+            left: 310, top: 225, fontSize: 6, fontFamily: "monospace", fill: "#FF0000"
+         }) //<-- this one, I added and broke VIZ
 
          return {figure: figure, ex1: ex1, status: status, status2: status2, credit: credit,
         pcBubble: pcBubble, aluOpBubble: aluOpBubble,
-        nextPcDot: nextPcDot, nextPcTxt: nextPcTxt}
+        nextPcDot: nextPcDot, nextPcTxt: nextPcTxt,
+        alu_ctrlTxt: alu_ctrlTxt} //<-- this one, I added and broke VIZ
       },
 
          render() {
          // Fetch raw instruction hex directly from the TL-Verilog signal!
          let raw_instr = this.sigRef(`$instr`, 0).asBigInt(0n)
          let pc_big    = this.sigRef(`$pc`, 0).asBigInt(0n)
+         let alu_ctrl = this.sigRef(`$alu_ctrl`,0).asInt(0) //<-- this one, I added and broke VIZ
          
          let S = {
             r:        this.sigRef(`$is_r`, 0).asInt(0) == 1,
@@ -307,8 +363,9 @@
          })
          this.getObjects().pcBubble.set({text: "PC=0x" + pc_big.toString(16).toUpperCase()})
          this.getObjects().aluOpBubble.set({text: "ALUOp=" + aluop.toString(2).padStart(2, "0")})
-         this.getObjects().nextPcDot.set({fill: S.pcsrc ? "#ffc09a" : "#FFC0CB"})
+         this.getObjects().nextPcDot.set({fill: S.pcsrc ? "#ffc09a" : "#ffffff"})
          this.getObjects().nextPcTxt.set({text: "0x" + nextPc.toString(16).toUpperCase()})
+         this.getObjects().alu_ctrlTxt.set({text: "Ctrl:" + alu_ctrl.toString(2).padStart(4, "0")}) //<-- this one, I added and broke VIZ
 
          this._paint()
          return []
