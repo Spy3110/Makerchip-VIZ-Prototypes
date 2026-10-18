@@ -12,7 +12,7 @@
                      $pc_branch ? >>1$branch_target :
                      $pc_plus_four;
          $pc_plus_four[63:0] = >>1$pc + 64'd4;
-         $branch_target[63:0] = >>1$pc + ($sign_ext_imm << 2);
+         $branch_target[63:0] = >>1$pc + (>>2$sign_ext_imm << 2);
          
          //instruction memory
          $instr[31:0] = ($pc[5:2] == 4'd1) ? 32'h8B030041 : //ADD
@@ -34,6 +34,41 @@
          $rn[4:0] = $instr[9:5]; //read reg 1
          $rm[4:0] = $instr[20:16]; //read reg 2
          $rt[4:0] = $instr[4:0]; //destination reg
+         
+         $imm19[18:0] = $instr[23:5];
+         $sign_ext_imm[63:0] = {{45{$imm19[18]}}, $imm19};
+         //for LDUR/STUR
+         $imm9_ext[63:0] = {{55{$instr[20]}}, $instr[20:12]};
+         
+         $read_reg2[4:0] = $instr[28] ? $rt : $rm; //deciding from 28th bit
+         
+         //control unit-----------
+         $branch   = $is_cbz;
+         $memread  = $is_ldur;
+         $memtoreg = $is_ldur;
+         $memwrite = $is_stur;
+         $alusrc   = $is_ldur || $is_stur;
+         $regwrite = $is_r || $is_ldur;
+         $aluop[1:0] = $is_r   ? 2'b10 :
+                       $is_cbz ? 2'b01 :
+                                 2'b00;
+         
+         //-----the register file--------
+         /xreg[31:0]
+            $wr_en = /top>>1$regwrite &&
+                     (/top>>1$rt == #xreg) &&
+                     (#xreg != 5'b11111);
+            $val[63:0] = (/top$reset) ? 64'b0 :
+                         $wr_en  ? /top>>1$wr_data :
+                             $RETAIN;
+
+         $rs1_data[63:0] = ($rn == 5'd31) ? 64'b0 : /xreg[$rn]$val; //i didnt quite get it...
+         $rs2_data[63:0] = ($read_reg2 == 5'd31) ? 64'b0 : /xreg[$read_reg2]$val;
+
+         //We want to write data to register.
+         $wr_data[63:0] = $memtoreg ? $dmem_rd_data : $alu_result;
+
+         
       @2
          //EX stage
          
