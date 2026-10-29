@@ -178,6 +178,7 @@
          const figure = this.global.pdf.extractToFabric(this, {url: PDF_URL}, {
             extract: {page: 1, select: {mode: "largest"}, clip: true},
             build: {
+               notice: "Diagram fetched at runtime from the PDF URL in the code (not copied into this file).",
                primitives: PRIMS,
                labels: LABS,
                onReady: ({elements, fig}) => {
@@ -201,7 +202,6 @@
          // ---- Box-space overlays and status text ----
          const status  = new fabric.Text("loading diagram...", {left: 15, top: 332, fontSize: 11, fill: "#222222", fontFamily: "monospace"})
          const status2 = new fabric.Text("", {left: 15, top: 348, fontSize: 8, fill: "#555555", fontFamily: "monospace"})
-         const credit  = new fabric.Text("Diagram fetched at runtime from the PDF URL in the code (not copied into this file).", {left: 15, top: 362, fontSize: 6, fill: "#999999", fontFamily: "monospace"})
          const mkTxt = (s, l, t) => new fabric.Text(s, {left: l, top: t, fontSize: 6, fontFamily: "monospace", fill: "#FF0000"})
          const pcBubble    = new fabric.Text("PC=0x0", {left: 38, top: 200, fontSize: 9, fontFamily: "monospace", fill: "#FF0000"})
          const aluOpBubble = new fabric.Text("ALUOp=00", {left: 300, top: 290, fontSize: 9, fontFamily: "monospace", fill: "#FF0000"})
@@ -212,7 +212,7 @@
          const rmTxt = mkTxt("Rm:00000", 130, 185)
          const rtTxt = mkTxt("Rt:00000", 130, 205)
 
-         return {figure, ex1, status, status2, credit,
+         return {figure, ex1, status, status2,
                  pcBubble, aluOpBubble, nextPcDot, nextPcTxt,
                  alu_ctrlTxt, rnTxt, rmTxt, rtTxt}
       },
