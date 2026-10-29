@@ -20,157 +20,88 @@
       box: {left: 0, top: 0, width: 350, height: 200, fill: "#f8f8f8"},
 
       init() {
-         let widgets = {}
+         //change the URL here!!
+         const PDF_URL = "https://asks-handle-blacks-reno.trycloudflare.com/page179.pdf"
+         const OFFX = 0
+         const OFFY = 36
 
-         let figure = new fabric.Group([], {
-            originX: "left", originY: "top", selectable: false, evented: false
+         // extractToFabric returns the (initially empty) group synchronously and fills it
+         // when the PDF arrives. Live Doc shows its own "Loading PDF..." text meanwhile,
+         // and draws the document's copyright notice below the figure by default.
+         const figure = this.global.pdf.extractToFabric(this, {url: PDF_URL}, {
+            extract: {
+               page: 1,
+               select: {mode: "region", rect: [90, 300, 500, 420]},
+               clip: true
+            },
+            build: {
+               onError: (e) => {
+                  this.obj.status.set({text: "PDF extraction failed - check the PDF URL / CORS / tunnel"})
+               }
+            }
          })
-         widgets.figure = figure
+         figure.set({left: OFFX, top: OFFY})   // figure (0,0) lands at box (OFFX, OFFY)
+
+         const widgets = {figure}
 
          widgets.caption = new fabric.Text(
             "Harris & Harris Figure 4.8 — fulladder synthesized circuit",
-            {left: 18, top: 8, fontSize: 10, fontFamily: "Roboto", fill: "#555"}
-         )
-         widgets.loading = new fabric.Text(
-            "extracting figure...",
-            {left: 18, top: 26, fontSize: 9, fontFamily: "Roboto", fill: "#666"}
+            {left: 18, top: 8, fontSize: 10, fontFamily: "Roboto", fill: "#333"}
          )
          widgets.status = new fabric.Text("", {
             left: 18, top: 286, fontSize: 8, fontFamily: "Roboto", fill: "#1565c0",
             selectable: false, evented: false
          })
-         
-          //change the URL here!!
-         const PDF_URL = "https://pumps-sec-chorus-boxes.trycloudflare.com/page179.pdf"
-         const OFFX = 20
-         const OFFY = 36
 
          // ── DEBUG GRID (set to false once bubbles are positioned correctly) ──
          const SHOW_DEBUG_GRID = false
-         let debugDots = []
          if (SHOW_DEBUG_GRID) {
+            let n = 0
             for (let gx = 0; gx <= 400; gx += 40) {
                for (let gy = 0; gy <= 150; gy += 40) {
-                  debugDots.push(new fabric.Circle({
+                  widgets["dbg_dot" + n] = new fabric.Circle({
                      left: gx, top: gy, radius: 1.5, fill: "#00aaff",
-                     originX: "center", originY: "center", visible: false
-                  }))
-                  debugDots.push(new fabric.Text(gx + "," + gy, {
-                     left: gx + 3, top: gy + 3, fontSize: 6, fill: "#00aaff", visible: false
-                  }))
+                     originX: "center", originY: "center"
+                  })
+                  widgets["dbg_txt" + n] = new fabric.Text(gx + "," + gy, {
+                     left: gx + 3, top: gy + 3, fontSize: 6, fill: "#00aaff"
+                  })
+                  n++
                }
             }
          }
-         //widgets.debugDots = debugDots
 
-         // ── Bubble factory: dot + value label ──
-         const mkBubble = (name) => ({
-            dot: new fabric.Circle({
-               left: 0, top: 0, radius: 6, fill: "#999",
-               stroke: "#333", strokeWidth: 1, originX: "center", originY: "center", visible: false
-            }),
-            txt: new fabric.Text(name + "=?", {
-               left: 0, top: 0, fontSize: 8, fontFamily: "monospace", fill: "#222", visible: false
-            })
-         })
-
-         let bub = {
-            aa:  mkBubble("a"),
-            bb:  mkBubble("b"),
-            cin: mkBubble("cin"),
-            gg:  mkBubble("g"),
-            ss:  mkBubble("s"),
-            unc: mkBubble("uc"),
-            co:  mkBubble("cout")
-         }
-         this._bub = bub
-
-         // ── POSITIONS (placeholder — calibrate against the debug grid dots) ──
+         // ── Value bubbles (box space): dot + label per signal ──
+         // POS is in box coordinates — calibrate against the debug grid.
          const POS = {
-            aa:  {x: 30,  y: 110},
-            bb:  {x: 30,  y: 150},
-            cin: {x: 21,  y: 70},
-            gg:  {x: 155, y: 32},
-            ss:  {x: 310, y: 45},
-            unc: {x: 155, y: 155},
-            co:  {x: 310, y: 120}
+            aa:  {x: 30,  y: 110, name: "a"},
+            bb:  {x: 30,  y: 150, name: "b"},
+            cin: {x: 21,  y: 70,  name: "cin"},
+            gg:  {x: 155, y: 32,  name: "g"},
+            ss:  {x: 310, y: 45,  name: "s"},
+            unc: {x: 155, y: 155, name: "uc"},
+            co:  {x: 310, y: 120, name: "cout"}
          }
-
-         const place = (b, pos) => {
-            b.dot.set({left: pos.x, top: pos.y, visible: true})
-            b.txt.set({left: pos.x + 9, top: pos.y - 5, visible: true})
-         }
-         Object.keys(bub).forEach((k) => place(bub[k], POS[k]))
-
-         this._ready = false
-         this._state = null   // explicit — nothing to paint until render() runs once
-
-         this._paint = () => {
-            // Guard BOTH conditions: extraction must be done AND at least one
-            // render() cycle must have populated _state. Without the second
-            // check, the .then() callback below can call _paint() before any
-            // cycle has run, reading undefined.aa and throwing mid-render —
-            // which corrupts the Fabric group and cascades into
-            // "this._objects[e].render is not a function" on every later frame.
-            if (!this._ready || !this._state) { return }
-            const S = this._state
-            const ON = "#e8590c"
-            const set1 = (b, v) => {
-               b.dot.set({fill: v ? ON : "#999"})
-               let name = b.txt.text.split("=")[0]
-               b.txt.set({text: name + "=" + v, fill: v ? ON : "#222"})
-            }
-            set1(bub.aa,  S.aa)
-            set1(bub.bb,  S.bb)
-            set1(bub.cin, S.cin)
-            set1(bub.gg,  S.gg)
-            set1(bub.ss,  S.ss)
-            set1(bub.unc, S.unc)
-            set1(bub.co,  S.co)
-            this.getCanvas().requestRenderAll()
-         }
-
-         this.global.pdf.buildFigure(fabric, {url: PDF_URL}, {
-            page: 1,
-            select: {mode: "region", rect: [90, 300, 500, 420], space: "device"},
-            clip: true,
-            left: OFFX,
-            top: OFFY,
-            into: figure
-         }).then(() => {
-            widgets.loading.set({visible: false})
-            widgets.caption.set({fill: "#333"})
-            if (SHOW_DEBUG_GRID) {
-               debugDots.forEach((d) => d.set({visible: true}))
-            }
-            this._ready = true
-            this._paint()   // safe no-op now if render() hasn't fired yet
-            this.getCanvas().requestRenderAll()
-         }).catch((e) => {
-            console.error("PDF figure extraction failed:", e)
-            widgets.loading.set({
-               text: "PDF extraction failed (see console)",
-               fill: "#c00"
+         Object.keys(POS).forEach((k) => {
+            const p = POS[k]
+            widgets[k + "_dot"] = new fabric.Circle({
+               left: p.x, top: p.y, radius: 6, fill: "#999",
+               stroke: "#333", strokeWidth: 1, originX: "center", originY: "center"
             })
-            widgets.status.set({text: "Check the PDF URL / CORS / tunnel"})
-            this.getCanvas().requestRenderAll()
+            widgets[k + "_txt"] = new fabric.Text(p.name + "=?", {
+               left: p.x + 9, top: p.y - 5, fontSize: 8, fontFamily: "monospace", fill: "#222"
+            })
          })
 
-         return Object.assign(
-            widgets,
-            {aa_dot: bub.aa.dot, aa_txt: bub.aa.txt},
-            {bb_dot: bub.bb.dot, bb_txt: bub.bb.txt},
-            {cin_dot: bub.cin.dot, cin_txt: bub.cin.txt},
-            {gg_dot: bub.gg.dot, gg_txt: bub.gg.txt},
-            {ss_dot: bub.ss.dot, ss_txt: bub.ss.txt},
-            {unc_dot: bub.unc.dot, unc_txt: bub.unc.txt},
-            {co_dot: bub.co.dot, co_txt: bub.co.txt},
-            debugDots.reduce((acc, d, i) => { acc["dbg" + i] = d; return acc }, {})
-         )
+         return widgets
       },
 
       render() {
-         this._state = {
+         // The bubbles don't depend on the PDF, so no readiness check is needed here.
+         const o = this.getObjects()
+         const ON = "#e8590c"
+         const NAMES = {aa: "a", bb: "b", cin: "cin", gg: "g", ss: "s", unc: "uc", co: "cout"}
+         const V = {
             aa:  '$aa'.asInt(0),
             bb:  '$bb'.asInt(0),
             cin: '$cin'.asInt(0),
@@ -179,7 +110,11 @@
             unc: '$un1_cout'.asInt(0),
             co:  '$cout'.asInt(0)
          }
-         this._paint()
+         Object.keys(NAMES).forEach((k) => {
+            const v = V[k]
+            o[k + "_dot"].set({fill: v ? ON : "#999"})
+            o[k + "_txt"].set({text: NAMES[k] + "=" + v, fill: v ? ON : "#222"})
+         })
          return []
       }
 
